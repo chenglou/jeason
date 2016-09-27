@@ -1,4 +1,6 @@
-S hack/**
 S src/**
+S hack/**
 
 B _build/**
+
+PKG js_of_ocaml compiler-libs

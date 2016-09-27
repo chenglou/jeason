@@ -37,7 +37,7 @@ clean:
 
 build-parser:
 	cd $(TOP); \
-	ocamlbuild -no-links $(REL_DIR)/parser_flow.cmxa
+	ocamlbuild -no-links $(REL_DIR)/main.native
 
 js:
 	cd $(TOP); \
