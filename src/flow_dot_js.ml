@@ -60,8 +60,8 @@ let load_lib_files ~master_cx ~metadata files
 
       | _, parse_errors ->
         let converted = List.fold_left (fun acc err ->
-          Errors.(ErrorSet.add (parse_error_to_flow_error err) acc)
-        ) Errors.ErrorSet.empty parse_errors in
+          ErrorsFlow.(ErrorSet.add (parse_error_to_flow_error err) acc)
+        ) ErrorsFlow.ErrorSet.empty parse_errors in
         save_parse_errors lib_file converted;
         exclude_syms, ((lib_file, false) :: result)
 
@@ -106,7 +106,7 @@ let get_master_cx =
       cx
 
 let set_libs filenames =
-  let root = Path.dummy_path in
+  let root = PathFlow.dummy_path in
   let master_cx = get_master_cx root in
   let metadata = stub_metadata ~root ~checked:true in
   let _ = load_lib_files
@@ -124,8 +124,8 @@ let set_libs filenames =
   Merge_js.ContextOptimizer.sig_context [master_cx]
 
 let check_content ~filename ~content =
-  let stdin_file = Some (Path.make_unsafe filename, content) in
-  let root = Path.dummy_path in
+  let stdin_file = Some (PathFlow.make_unsafe filename, content) in
+  let root = PathFlow.dummy_path in
   let filename = Loc.SourceFile filename in
   let errors = match parse_content filename content with
   | ast, [] ->
@@ -152,12 +152,12 @@ let check_content ~filename ~content =
     Context.errors cx
   | _, parse_errors ->
     List.fold_left (fun acc err ->
-      Errors.(ErrorSet.add (parse_error_to_flow_error err) acc)
-    ) Errors.ErrorSet.empty parse_errors
+      ErrorsFlow.(ErrorSet.add (parse_error_to_flow_error err) acc)
+    ) ErrorsFlow.ErrorSet.empty parse_errors
   in
   errors
-  |> Errors.ErrorSet.elements
-  |> Errors.json_of_errors_with_context ~root ~stdin_file
+  |> ErrorsFlow.ErrorSet.elements
+  |> ErrorsFlow.json_of_errors_with_context ~root ~stdin_file
   |> js_of_json
 
 let check filename =
@@ -188,7 +188,7 @@ let mk_loc file line col =
 
 let infer_type filename content line col =
     let filename = Loc.SourceFile filename in
-    let root = Path.dummy_path in
+    let root = PathFlow.dummy_path in
     match parse_content filename content with
     | ast, [] ->
       (* defaults *)

@@ -15,8 +15,8 @@ open Reason (* mk_id *)
 (* Scopes                                                                     *)
 (******************************************************************************)
 
-(* these are basically owned by Env, but are here
-   to break circularity between Env and Flow_js
+(* these are basically owned by EnvFlow, but are here
+   to break circularity between EnvFlow and Flow_js
  *)
 
 (* entry state *)
@@ -158,7 +158,7 @@ module Entry = struct
     | Type _ ->
       entry
     | Value ({ kind = Const _; specific = Type.EmptyT _; _ } as v) ->
-      (* cleared consts: see note on Env.reset_current_activation *)
+      (* cleared consts: see note on EnvFlow.reset_current_activation *)
       if Reason.is_internal_name name
       then entry
       else Value { v with specific = v.general }

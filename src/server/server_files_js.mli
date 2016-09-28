@@ -8,11 +8,11 @@
  *
  *)
 
-val config_file: Path.t -> string
-val init_file: tmp_dir:string -> Path.t -> string
-val recheck_file: tmp_dir:string -> Path.t -> string
-val lock_file: tmp_dir:string -> Path.t -> string
-val pids_file: tmp_dir:string -> Path.t -> string
-val socket_file: tmp_dir:string -> Path.t -> string
-val dfind_log_file: tmp_dir:string -> Path.t -> string
-val log_file: tmp_dir:string -> Path.t -> FlowConfig.Opts.t -> Path.t
+val config_file: PathFlow.t -> string
+val init_file: tmp_dir:string -> PathFlow.t -> string
+val recheck_file: tmp_dir:string -> PathFlow.t -> string
+val lock_file: tmp_dir:string -> PathFlow.t -> string
+val pids_file: tmp_dir:string -> PathFlow.t -> string
+val socket_file: tmp_dir:string -> PathFlow.t -> string
+val dfind_log_file: tmp_dir:string -> PathFlow.t -> string
+val log_file: tmp_dir:string -> PathFlow.t -> FlowConfig.Opts.t -> PathFlow.t

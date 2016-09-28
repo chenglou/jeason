@@ -70,8 +70,8 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
       ServerProt.response_to_channel oc msg;
       Flow_logger.log "Status: Error";
       Flow_logger.log "server_dir=%s, client_dir=%s"
-        (Path.to_string server_root)
-        (Path.to_string client_root);
+        (PathFlow.to_string server_root)
+        (PathFlow.to_string client_root);
       Flow_logger.log "%s is not listening to the same directory. Exiting."
         name;
       FlowExitStatus.(exit Server_client_directory_mismatch)
@@ -80,7 +80,7 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
     let errors = env.ServerEnv.errorl in
     (* TODO: check status.directory *)
     status_log errors;
-    FlowEventLogger.status_response (Errors.json_of_errors errors);
+    FlowEventLogger.status_response (ErrorsFlow.json_of_errors errors);
     send_errorl errors oc
 
   let die_nicely genv oc =
@@ -146,10 +146,10 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
             ~check_syntax:true content file with
           | _, _, errors, _ -> errors)
         else
-          Errors.ErrorSet.empty
+          ErrorsFlow.ErrorSet.empty
         end
     in
-    send_errorl (Errors.to_list errors) oc
+    send_errorl (ErrorsFlow.to_list errors) oc
 
   let mk_loc file line col =
     {
@@ -259,7 +259,7 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
     let suggest_for_file result_map file =
       (try
          let (file, region) = parse_suggest_cmd file in
-         let file = Path.to_string (Path.make file) in
+         let file = PathFlow.to_string (PathFlow.make file) in
          let content = cat file in
          let file_loc = Loc.SourceFile file in
          let cx =
@@ -324,8 +324,8 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
     let result =
       if List.length errors > 0 then Utils_js.Err (
         let error_set = List.fold_left (fun set err ->
-          Errors.ErrorSet.add err set
-        ) Errors.ErrorSet.empty errors in
+          ErrorsFlow.ErrorSet.add err set
+        ) ErrorsFlow.ErrorSet.empty errors in
         ServerProt.GenFlowFile_TypecheckError error_set
       ) else (
         let cache = new Context_cache.context_cache in
@@ -410,7 +410,7 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
     flush oc
 
   let module_name_of_string ~options module_name_str =
-    let path = Path.to_string (Path.make module_name_str) in
+    let path = PathFlow.to_string (PathFlow.make module_name_str) in
     if Files.is_flow_file ~options path
     then Modulename.Filename (Loc.SourceFile path)
     else Modulename.String module_name_str
@@ -467,7 +467,7 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
     let options = genv.ServerEnv.options in
     let root = Options.root options in
     let config_path = Server_files_js.config_file root in
-    let sroot = Path.to_string root in
+    let sroot = PathFlow.to_string root in
     let want = Files.wanted ~options all_libs in
 
     (* Die if the .flowconfig changed *)
@@ -524,7 +524,7 @@ module FlowProgram : Server.SERVER_PROGRAM = struct
       FlowExitStatus.(exit Server_out_of_date)
     end;
 
-    let flow_typed_path = Path.to_string (Files.get_flowtyped_path root) in
+    let flow_typed_path = PathFlow.to_string (Files.get_flowtyped_path root) in
     let is_changed_lib filename =
       let is_lib = SSet.mem filename all_libs || filename = flow_typed_path in
       is_lib &&

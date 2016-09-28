@@ -15,12 +15,12 @@ let add_dir_sep dir =
   else dir ^ dir_sep
 
 let file_of_root extension ~tmp_dir root =
-  let tmp_dir = tmp_dir |> Path.make |> Path.to_string |> add_dir_sep in
-  let root_part = Path.slash_escaped_string_of_path root in
+  let tmp_dir = tmp_dir |> PathFlow.make |> PathFlow.to_string |> add_dir_sep in
+  let root_part = PathFlow.slash_escaped_string_of_path root in
   Printf.sprintf "%s%s.%s" tmp_dir root_part extension
 
 let config_file root =
-  Path.to_string (Path.concat root ".flowconfig")
+  PathFlow.to_string (PathFlow.concat root ".flowconfig")
 
 let init_file    = file_of_root "init"
 let recheck_file = file_of_root "recheck"
@@ -31,4 +31,4 @@ let dfind_log_file = file_of_root "dfind"
 let log_file ~tmp_dir root opts =
   match opts.FlowConfig.Opts.log_file with
   | Some x -> x
-  | None -> Path.make (file_of_root "log" ~tmp_dir root)
+  | None -> PathFlow.make (file_of_root "log" ~tmp_dir root)

@@ -47,7 +47,7 @@ let kill (ic, oc) =
 
 let nice_kill (ic, oc) ~tmp_dir root =
   prerr_endlinef "Attempting to nicely kill server for %s"
-    (Path.to_string root);
+    (PathFlow.to_string root);
   let response = kill (ic, oc) in
   if is_expected response then begin
     let i = ref 0 in
@@ -57,7 +57,7 @@ let nice_kill (ic, oc) ~tmp_dir root =
       else raise FailedToKill
     done;
     prerr_endlinef "Successfully killed server for %s"
-      (Path.to_string root)
+      (PathFlow.to_string root)
   end else begin
     prerr_endlinef "Unexpected response from the server: %s\n"
       (ServerProt.response_to_string response);
@@ -66,7 +66,7 @@ let nice_kill (ic, oc) ~tmp_dir root =
 
 let mean_kill ~tmp_dir root =
   prerr_endlinef "Attempting to meanly kill server for %s"
-    (Path.to_string root);
+    (PathFlow.to_string root);
   let pids =
     try PidLog.get_pids (Server_files_js.pids_file ~tmp_dir root)
     with PidLog.FailedToGetPids -> Printf.fprintf stderr
@@ -89,21 +89,21 @@ let mean_kill ~tmp_dir root =
   if CommandConnectSimple.server_exists ~tmp_dir root
   then raise FailedToKill
   else prerr_endlinef "Successfully killed server for %s\n%!"
-    (Path.to_string root)
+    (PathFlow.to_string root)
 
 let main temp_dir from root () =
   let root = CommandUtils.guess_root root in
   let config = FlowConfig.get (Server_files_js.config_file root) in
-  let root_s = Path.to_string root in
+  let root_s = PathFlow.to_string root in
   let tmp_dir = match temp_dir with
   | Some x -> x
   | None -> FlowConfig.(config.options.Opts.temp_dir)
   in
-  let tmp_dir = Path.to_string (Path.make tmp_dir) in
+  let tmp_dir = PathFlow.to_string (PathFlow.make tmp_dir) in
   FlowEventLogger.set_from from;
   prerr_endlinef
     "Trying to connect to server for %s"
-    (Path.to_string root);
+    (PathFlow.to_string root);
   CommandConnectSimple.(
     match connect_once ~tmp_dir root with
     | Result.Ok conn ->

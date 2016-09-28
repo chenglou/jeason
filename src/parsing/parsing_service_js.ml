@@ -14,7 +14,7 @@ module Ast = Spider_monkey_ast
 
 type result =
   | Parse_ok of Spider_monkey_ast.program
-  | Parse_err of Errors.ErrorSet.t
+  | Parse_err of ErrorsFlow.ErrorSet.t
   | Parse_skip of parse_skip_reason
 
 and parse_skip_reason =
@@ -26,7 +26,7 @@ type results = {
   parse_ok: FilenameSet.t;                   (* successfully parsed files *)
   parse_skips: (filename * Docblock.t) list; (* list of skipped files *)
   parse_fails: (filename * Docblock.t) list; (* list of failed files *)
-  parse_errors: Errors.ErrorSet.t list;      (* parallel list of error sets *)
+  parse_errors: ErrorsFlow.ErrorSet.t list;      (* parallel list of error sets *)
   parse_resource_files: FilenameSet.t;       (* resource files *)
 }
 
@@ -141,7 +141,7 @@ let string_of_docblock_error = function
 
 let get_docblock
   ~max_tokens file content
-: Errors.ErrorSet.t option * Docblock.t =
+: ErrorsFlow.ErrorSet.t option * Docblock.t =
   match file with
   | Loc.ResourceFile _
   | Loc.JsonFile _ -> None, Docblock.default_info
@@ -150,12 +150,12 @@ let get_docblock
     if errors = [] then None, docblock
     else
       let errs = List.fold_left (fun acc (loc, err) ->
-        let err = Errors.mk_error
-          ~kind:Errors.ParseError
+        let err = ErrorsFlow.mk_error
+          ~kind:ErrorsFlow.ParseError
           [loc, [string_of_docblock_error err]]
         in
-        Errors.ErrorSet.add err acc
-      ) Errors.ErrorSet.empty errors in
+        ErrorsFlow.ErrorSet.add err acc
+      ) ErrorsFlow.ErrorSet.empty errors in
       Some errs, docblock
 
 let do_parse ?(fail=true) ~types_mode ~use_strict ~info content file =
@@ -186,14 +186,14 @@ let do_parse ?(fail=true) ~types_mode ~use_strict ~info content file =
   )
   with
   | Parse_error.Error (first_parse_error::_) ->
-    let err = Errors.parse_error_to_flow_error first_parse_error in
-    Parse_err (Errors.ErrorSet.singleton err)
+    let err = ErrorsFlow.parse_error_to_flow_error first_parse_error in
+    Parse_err (ErrorsFlow.ErrorSet.singleton err)
   | e ->
     let s = Printexc.to_string e in
     let msg = spf "unexpected parsing exception: %s" s in
     let loc = Loc.({ none with source = Some file }) in
-    let err = Errors.(simple_error ~kind:ParseError loc msg) in
-    Parse_err (Errors.ErrorSet.singleton err)
+    let err = ErrorsFlow.(simple_error ~kind:ParseError loc msg) in
+    Parse_err (ErrorsFlow.ErrorSet.singleton err)
 
 (* parse file, store AST to shared heap on success.
  * Add success/error info to passed accumulator. *)

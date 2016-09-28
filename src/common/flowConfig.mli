@@ -32,7 +32,7 @@ module Opts : sig
     traces: int;
     strip_root: bool;
     all: bool;
-    log_file: Path.t option;
+    log_file: PathFlow.t option;
     max_header_tokens: int;
     max_workers: int;
     temp_dir: string;

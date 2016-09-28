@@ -143,8 +143,8 @@ let functiontype cx this_t {reason; kind; tparams; params; return_t; _} =
     params_names = Some (Func_params.names params);
     return_t;
     is_predicate = kind = Predicate;
-    closure_t = Env.peek_frame ();
-    changeset = Env.retrieve_closure_changeset ()
+    closure_t = EnvFlow.peek_frame ();
+    changeset = EnvFlow.retrieve_closure_changeset ()
   } in
   let t = FunT (reason, static, prototype, funtype) in
   if tparams = []
@@ -167,7 +167,7 @@ let methodtype {reason; tparams; params; return_t; _} =
 let methodtype_DEPRECATED {reason; params; return_t; _} =
   let params_tlist = Func_params.tlist params in
   let params_names = Func_params.names params in
-  let frame = Env.peek_frame () in
+  let frame = EnvFlow.peek_frame () in
   FunT (
     reason,
     Flow.dummy_static reason,
@@ -196,11 +196,11 @@ let toplevels id cx this super ~decls ~stmts ~expr
     mk_reason "function body" loc
   in
 
-  let env =  Env.peek_env () in
-  let new_env = Env.clone_env env in
+  let env =  EnvFlow.peek_env () in
+  let new_env = EnvFlow.clone_env env in
 
-  Env.update_env cx reason new_env;
-  Env.havoc_all();
+  EnvFlow.update_env cx reason new_env;
+  EnvFlow.havoc_all();
 
   (* create and prepopulate function scope *)
   let function_scope =
@@ -216,12 +216,12 @@ let toplevels id cx this super ~decls ~stmts ~expr
   in
 
   (* push the scope early so default exprs can reference earlier params *)
-  Env.push_var_scope cx function_scope;
+  EnvFlow.push_var_scope cx function_scope;
 
   (* bind type params *)
   SMap.iter (fun name t ->
     let r = reason_of_t t in
-    Env.bind_type cx name (TypeT (r, t)) r
+    EnvFlow.bind_type cx name (TypeT (r, t)) r
       ~state:Scope.State.Initialized
   ) tparams_map;
 
@@ -236,9 +236,9 @@ let toplevels id cx this super ~decls ~stmts ~expr
     ) params;
     (* add to scope *)
     if const_params
-    then Env.bind_implicit_const ~state:State.Initialized
+    then EnvFlow.bind_implicit_const ~state:State.Initialized
       Entry.ConstParamBinding cx name t reason
-    else Env.bind_implicit_let ~state:State.Initialized
+    else EnvFlow.bind_implicit_let ~state:State.Initialized
       Entry.ParamBinding cx name t reason
   );
 
@@ -336,6 +336,6 @@ let toplevels id cx this super ~decls ~stmts ~expr
     Flow.flow cx (void_t, UseT (use_op, return_t))
   );
 
-  Env.pop_var_scope ();
+  EnvFlow.pop_var_scope ();
 
-  Env.update_env cx reason env
+  EnvFlow.update_env cx reason env

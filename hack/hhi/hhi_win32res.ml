@@ -78,5 +78,5 @@ let rec dump_item root = function
 
 let read_index () = read_index_opt 100
 let dump_files root idx =
-  let root = Path.to_string root in
+  let root = PathFlow.to_string root in
   List.iter (dump_item root) idx

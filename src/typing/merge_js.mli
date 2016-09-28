@@ -22,8 +22,8 @@ val restore: Context.t ->
 val merge_lib_file:
   Context.t ->
   Context.t ->
-  (filename -> Errors.ErrorSet.t -> unit) ->
-  (filename -> Errors.ErrorSuppressions.t -> unit) ->
+  (filename -> ErrorsFlow.ErrorSet.t -> unit) ->
+  (filename -> ErrorsFlow.ErrorSuppressions.t -> unit) ->
   unit
 
 module ContextOptimizer: sig

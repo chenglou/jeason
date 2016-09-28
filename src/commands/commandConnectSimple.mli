@@ -15,6 +15,6 @@ type error =
   | Server_busy
   | Build_id_mismatch
 
-val server_exists : tmp_dir:string -> Path.t -> bool
+val server_exists : tmp_dir:string -> PathFlow.t -> bool
 
-val connect_once : tmp_dir:string -> Path.t -> (Timeout.in_channel * out_channel, error) Result.t
+val connect_once : tmp_dir:string -> PathFlow.t -> (Timeout.in_channel * out_channel, error) Result.t

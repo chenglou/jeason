@@ -8,8 +8,8 @@
  *
  *)
 
-val get_hhi_root : unit -> Path.t
+val get_hhi_root : unit -> PathFlow.t
 
-val set_hhi_root_for_unit_test : Path.t -> unit
+val set_hhi_root_for_unit_test : PathFlow.t -> unit
 
 val touch : unit -> unit

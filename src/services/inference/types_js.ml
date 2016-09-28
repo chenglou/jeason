@@ -23,7 +23,7 @@ let error_suppressions = ref FilenameMap.empty
 (* aggregate error map, built after check or recheck
    by collate_errors
  *)
-let all_errors = ref Errors.ErrorSet.empty
+let all_errors = ref ErrorsFlow.ErrorSet.empty
 
 (****************** typecheck job helpers *********************)
 
@@ -37,16 +37,16 @@ let clear_errors ?(debug=false) (files: filename list) =
     merge_errors := FilenameMap.remove file !merge_errors;
     error_suppressions := FilenameMap.remove file !error_suppressions;
   ) files;
-  all_errors := Errors.ErrorSet.empty
+  all_errors := ErrorsFlow.ErrorSet.empty
 
 (* helper - save an error set into a global error map.
    clear mapping if errorset is empty *)
 let save_errset mapref file errset =
-  if Errors.ErrorSet.cardinal errset > 0 then
+  if ErrorsFlow.ErrorSet.cardinal errset > 0 then
     mapref :=
       let errset = match FilenameMap.get file !mapref with
       | Some prev_errset ->
-        Errors.ErrorSet.union prev_errset errset
+        ErrorsFlow.ErrorSet.union prev_errset errset
       | None -> errset
       in
       FilenameMap.add file errset !mapref
@@ -55,8 +55,8 @@ let save_errset mapref file errset =
 let filter_duplicate_provider mapref file =
   match FilenameMap.get file !mapref with
   | Some prev_errset ->
-    let new_errset = Errors.ErrorSet.filter (fun err ->
-      not (Errors.is_duplicate_provider_error err)
+    let new_errset = ErrorsFlow.ErrorSet.filter (fun err ->
+      not (ErrorsFlow.is_duplicate_provider_error err)
     ) prev_errset in
     mapref := FilenameMap.add file new_errset !mapref
   | None -> ()
@@ -72,7 +72,7 @@ let save_errormap mapref errmap =
 (* given a reference to a error suppression map (files to
    error suppressions), and two parallel lists of such,
    save the latter into the former. *)
-let save_suppressions mapref files errsups = Errors.(
+let save_suppressions mapref files errsups = ErrorsFlow.(
   List.iter2 (fun file errsup ->
     mapref := if ErrorSuppressions.cardinal errsup = 0
       then FilenameMap.remove file !mapref
@@ -86,7 +86,7 @@ let save_suppressions mapref files errsups = Errors.(
  * 3) Add errors for unused suppressions
  * 4) Properly distribute the new errors
  *)
-let filter_suppressed_errors errors = Errors.(
+let filter_suppressed_errors errors = ErrorsFlow.(
   let suppressions = ref ErrorSuppressions.empty in
 
   let filter_suppressed_error error =
@@ -106,7 +106,7 @@ let filter_suppressed_errors errors = Errors.(
   ErrorSuppressions.unused !suppressions
   |> List.fold_left
     (fun errset loc ->
-      let err = Errors.mk_error [
+      let err = ErrorsFlow.mk_error [
         loc, ["Error suppressing comment"; "Unused suppression"]
       ] in
       ErrorSet.add err errset
@@ -123,12 +123,12 @@ let filter_suppressed_errors errors = Errors.(
 let get_errors () =
   !all_errors
   |> filter_suppressed_errors
-  |> Errors.ErrorSet.elements
+  |> ErrorsFlow.ErrorSet.elements
 
 (* relocate errors to their reported positions,
    combine in single error map *)
 let collate_errors =
-  let open Errors in
+  let open ErrorsFlow in
   let collate _ errset acc = ErrorSet.union acc errset in
   fun () ->
     all_errors :=
@@ -175,7 +175,7 @@ let typecheck_contents ~options ?verbose ?(check_syntax=false)
         contents filename
       in
       let errors = match docblock_errors with
-        | None -> Errors.ErrorSet.empty
+        | None -> ErrorsFlow.ErrorSet.empty
         | Some errs -> errs
       in
       errors, parse_result, info
@@ -220,16 +220,16 @@ let typecheck_contents ~options ?verbose ?(check_syntax=false)
 
       (* Filter out suppressed errors *)
       let error_suppressions = Context.error_suppressions cx in
-      let errors = Errors.ErrorSet.fold (fun err errors ->
-        if not (fst (Errors.ErrorSuppressions.check err error_suppressions))
-        then Errors.ErrorSet.add err errors
+      let errors = ErrorsFlow.ErrorSet.fold (fun err errors ->
+        if not (fst (ErrorsFlow.ErrorSuppressions.check err error_suppressions))
+        then ErrorsFlow.ErrorSet.add err errors
         else errors
       ) (Context.errors cx) errors in
 
       timing, Some cx, errors, info
 
   | Parsing_service_js.Parse_err parse_errors ->
-      timing, None, Errors.ErrorSet.union parse_errors errors, info
+      timing, None, ErrorsFlow.ErrorSet.union parse_errors errors, info
 
   | Parsing_service_js.Parse_skip
      (Parsing_service_js.Skip_non_flow_file
@@ -630,7 +630,7 @@ let print_errors ~timing options errors =
   let root = Options.root options in
 
   let errors =
-    if strip_root then Errors.strip_root_from_errors root errors
+    if strip_root then ErrorsFlow.strip_root_from_errors root errors
     else errors
   in
 
@@ -640,9 +640,9 @@ let print_errors ~timing options errors =
       if options.Options.opt_profile
       then Some timing
       else None in
-    Errors.print_error_json ~root ~timing stdout errors
+    ErrorsFlow.print_error_json ~root ~timing stdout errors
   end else
-    Errors.print_error_summary
+    ErrorsFlow.print_error_summary
       ~flags:(Options.error_flags options)
       ~strip_root
       ~root

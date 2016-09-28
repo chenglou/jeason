@@ -29,8 +29,8 @@ module Init = struct
   let main from flowconfig_flags options root () =
     FlowEventLogger.set_from from;
     let root = match root with
-    | None -> Sys.getcwd () |> Path.make
-    | Some root -> Path.make root
+    | None -> Sys.getcwd () |> PathFlow.make
+    | Some root -> PathFlow.make root
     in
     let options = match options with
     | None -> []

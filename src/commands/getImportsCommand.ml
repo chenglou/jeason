@@ -53,7 +53,7 @@ let main option_values root json pretty strip_root modules () =
           | Modulename.String s -> s
           | Modulename.Filename f ->
             let f = Loc.string_of_filename f in
-            if strip_root then Files.relative_path (Path.to_string root) f
+            if strip_root then Files.relative_path (PathFlow.to_string root) f
             else f
         in
         let loc = relativize strip_root root loc in
@@ -77,7 +77,7 @@ let main option_values root json pretty strip_root modules () =
         JSON_Object (
           ("import", JSON_String req) ::
           ("loc", Reason.json_of_loc loc) ::
-          (Errors.deprecated_json_props_of_loc loc)
+          (ErrorsFlow.deprecated_json_props_of_loc loc)
         )
       ) assoc in
       let json = JSON_Object [

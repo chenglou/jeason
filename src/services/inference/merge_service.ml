@@ -167,7 +167,7 @@ let merge_strict_component ~options (component: filename list) =
     Context_cache.add_sig cx;
     file, errors
   )
-  else file, Errors.ErrorSet.empty
+  else file, ErrorsFlow.ErrorSet.empty
 
 let merge_strict_job ~options (merged, errsets) (components: filename list list) =
   List.fold_left (fun (merged, errsets) (component: filename list) ->
@@ -191,8 +191,8 @@ let merge_strict_job ~options (merged, errsets) (components: filename list list)
     | exc ->
       let file = List.hd component in
       let msg = "merge_strict_job exception: "^(fmt_exc exc) in
-      let errorset = Errors.ErrorSet.singleton
-        (Errors.internal_error file msg) in
+      let errorset = ErrorsFlow.ErrorSet.singleton
+        (ErrorsFlow.internal_error file msg) in
       prerr_endlinef "(%d) merge_strict_job THROWS: [%d] %s\n"
         (Unix.getpid()) (List.length component) (fmt_file_exc files exc);
       List.hd component :: merged, errorset::errsets

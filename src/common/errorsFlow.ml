@@ -90,7 +90,7 @@ let to_pp = function
   | BlameM (loc, s) -> loc, s
   | CommentM s -> Loc.none, s
 
-type stdin_file = (Path.t * string) option
+type stdin_file = (PathFlow.t * string) option
 
 let message_of_string s =
   CommentM s
@@ -125,7 +125,7 @@ let append_trace_reasons message_list trace_reasons =
   match trace_reasons with
   | [] -> message_list
   | _ ->
-    message_list @ (BlameM (Loc.none, "Trace:") :: trace_reasons)
+    message_list @ (BlameM (Loc.none, "TraceFlow:") :: trace_reasons)
 
 (* note: this is used only in old output format, which is deprecated
    except for error diffs. indenting would be hard (locs are printed
@@ -271,7 +271,7 @@ let relative_path ~strip_root ~root filename =
   if is_short_lib filename || Filename.is_relative filename
   then filename
   else if strip_root
-  then Files.relative_path (Path.to_string root) filename
+  then Files.relative_path (PathFlow.to_string root) filename
   else begin
     let relname = Files.relative_path (Sys.getcwd ()) filename in
     if String.length relname < String.length filename
@@ -309,7 +309,7 @@ let nth_line ~n content =
 
 let normalize_filename ~root filename =
   if Filename.is_relative filename
-  then Path.to_string (Path.concat root filename)
+  then PathFlow.to_string (PathFlow.concat root filename)
   else filename
 
 let read_line_in_file ~root line filename stdin_file =
@@ -321,7 +321,7 @@ let read_line_in_file ~root line filename stdin_file =
       try begin
         let content = match stdin_file with
         | Some (stdin_filename, content)
-          when normalize_filename ~root (Path.to_string stdin_filename) = filename ->
+          when normalize_filename ~root (PathFlow.to_string stdin_filename) = filename ->
             content
         | _ ->
             Sys_utils.cat filename

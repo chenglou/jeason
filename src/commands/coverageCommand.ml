@@ -51,7 +51,7 @@ let handle_error ~json ~pretty (loc, err) strip =
     let json = JSON_Object (
       ("error", JSON_String err) ::
       ("loc", Reason.json_of_loc loc) ::
-      (Errors.deprecated_json_props_of_loc loc)
+      (ErrorsFlow.deprecated_json_props_of_loc loc)
     ) in
     prerr_endline (json_to_string ~pretty json);
   ) else (

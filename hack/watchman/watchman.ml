@@ -27,14 +27,14 @@ exception Timeout
 let debug = false
 
 let crash_marker_path root =
-  let root_name = Path.slash_escaped_string_of_path root in
+  let root_name = PathFlow.slash_escaped_string_of_path root in
   Filename.concat GlobalConfig.tmp_dir (spf ".%s.watchman_failed" root_name)
 
 type init_settings = {
   subscribe_to_changes: bool;
   (** Seconds used for init timeout - will be reused for reinitialization. *)
   init_timeout: int;
-  root: Path.t;
+  root: PathFlow.t;
 }
 
 type dead_env = {
@@ -262,7 +262,7 @@ let with_crash_record_opt root source f =
 
 let init { init_timeout; subscribe_to_changes; root } =
   with_crash_record_opt root "init" @@ fun () ->
-  let root_s = Path.to_string root in
+  let root_s = PathFlow.to_string root in
   let sockname = get_sockname init_timeout in
   let socket = Timeout.open_connection (Unix.ADDR_UNIX sockname) in
   ignore @@ exec socket (capability_check ["relative_root"]);

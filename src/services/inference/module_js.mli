@@ -64,7 +64,7 @@ val commit_modules:
   filename list ->                    (* inferred modules *)
   NameSet.t ->                        (* removed files *)
   Utils_js.filename list *            (* providers *)
-    Errors.ErrorSet.t FilenameMap.t   (* filenames to error sets *)
+    ErrorsFlow.ErrorSet.t FilenameMap.t   (* filenames to error sets *)
 
 (* add file represented by context to module info store *)
 val add_module_info: options:Options.t -> Context.t -> unit

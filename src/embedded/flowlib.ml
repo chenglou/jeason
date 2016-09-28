@@ -19,7 +19,7 @@ let touch_root r =
  * handling in general, really). Running the server as root is likely to be a
  * security risk. Be careful. *)
 let extract path data =
-  let oc = Unix.open_process_out ("tar xzC " ^ (Path.to_string path)) in
+  let oc = Unix.open_process_out ("tar xzC " ^ (PathFlow.to_string path)) in
   output_string oc data;
   flush oc;
   ignore (Unix.close_process_out oc);

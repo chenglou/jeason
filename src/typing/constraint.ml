@@ -78,10 +78,10 @@ and constraints =
     info as values.
 **)
 and bounds = {
-  mutable lower: Trace.t TypeMap.t;
-  mutable upper: Trace.t UseTypeMap.t;
-  mutable lowertvars: Trace.t IMap.t;
-  mutable uppertvars: Trace.t IMap.t;
+  mutable lower: TraceFlow.t TypeMap.t;
+  mutable upper: TraceFlow.t UseTypeMap.t;
+  mutable lowertvars: TraceFlow.t IMap.t;
+  mutable uppertvars: TraceFlow.t IMap.t;
 }
 
 (* Extract bounds from a node. *)

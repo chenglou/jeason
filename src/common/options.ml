@@ -24,7 +24,7 @@ type t = {
   opt_all : bool;
   opt_check_mode: bool;
   opt_debug : bool;
-  opt_default_lib_dir: Path.t option;
+  opt_default_lib_dir: PathFlow.t option;
   opt_enable_const_params: bool;
   opt_enable_unsafe_getters_and_setters: bool;
   opt_enforce_strict_type_args: bool;
@@ -38,8 +38,8 @@ type t = {
   opt_ignores: (string * Str.regexp) list;
   opt_includes: Path_matcher.t;
   opt_json : bool;
-  opt_libs: Path.t list;
-  opt_log_file: Path.t;
+  opt_libs: PathFlow.t list;
+  opt_log_file: PathFlow.t;
   opt_max_workers: int;
   opt_module: string;
   opt_module_file_exts: SSet.t;
@@ -51,7 +51,7 @@ type t = {
   opt_output_graphml: bool;
   opt_profile : bool;
   opt_quiet : bool;
-  opt_root : Path.t;
+  opt_root : PathFlow.t;
   opt_server_mode: bool;
   opt_should_detach : bool;
   opt_should_wait : bool;

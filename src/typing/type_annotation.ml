@@ -14,7 +14,7 @@ module FlowError = Flow_error
 open Utils_js
 open Reason
 open Type
-open Env.LookupMode
+open EnvFlow.LookupMode
 
 (* AST helpers *)
 
@@ -281,7 +281,7 @@ let rec convert cx tparams_map = Ast.Type.(function
       | Some ((_, StringLiteral { StringLiteral.value; _ })::_) ->
           let reason = (mk_reason (spf "exports of module `%s`" value) loc) in
           let remote_module_t =
-            Env.get_var_declared_type cx (internal_module_name value) reason
+            EnvFlow.get_var_declared_type cx (internal_module_name value) reason
           in
           Flow_js.mk_tvar_where cx reason (fun t ->
             Flow_js.flow cx (remote_module_t, CJSRequireT(reason, t))
@@ -598,7 +598,7 @@ and convert_qualification ?(lookup_mode=ForType) cx reason_prefix
   | Unqualified (id) ->
     let loc, { Ast.Identifier.name; _ } = id in
     let reason = mk_reason (spf "%s `%s`" reason_prefix name) loc in
-    Env.get_var ~lookup_mode cx name reason
+    EnvFlow.get_var ~lookup_mode cx name reason
 )
 
 (** Like `destructuring`, the following function operates on types that might
@@ -718,7 +718,7 @@ and type_identifier cx name loc =
     then VoidT.at loc
     else (
       let reason = mk_reason (spf "identifier `%s`" name) loc in
-      let t = Env.var_ref ~lookup_mode:ForType cx name reason in
+      let t = EnvFlow.var_ref ~lookup_mode:ForType cx name reason in
       t
     )
   )

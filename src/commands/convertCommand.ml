@@ -43,10 +43,10 @@ let convert_file error_flags outpath file =
     let n = List.length errors in
     Printf.printf "%d errors:\n" n;
     let flow_errors = List.map (fun e ->
-      Errors.parse_error_to_flow_error e
+      ErrorsFlow.parse_error_to_flow_error e
     ) errors in
-    let root = Path.dummy_path in
-    Errors.print_error_summary
+    let root = PathFlow.dummy_path in
+    ErrorsFlow.print_error_summary
       ~flags:error_flags
       ~strip_root:false
       ~root
@@ -57,7 +57,7 @@ let convert_file error_flags outpath file =
   (* Printer_dts.program *)
 
 let find_files_recursive path =
-  Find.find ~filter:(fun x -> Filename.check_suffix x dts_ext) [Path.make path]
+  Find.find ~filter:(fun x -> Filename.check_suffix x dts_ext) [PathFlow.make path]
 
 let find_files path =
   Array.fold_left (fun acc f ->
@@ -96,7 +96,7 @@ let convert path recurse error_flags outpath =
         failwith "output path not available when recursive";
       convert_dir outpath path recurse error_flags
     ) in
-  print_endlinef "Total Errors: %d\nTotal Files: %d\nSuccessful Conversions: %d"
+  print_endlinef "Total ErrorsFlow: %d\nTotal Files: %d\nSuccessful Conversions: %d"
     nerrs total_files successful_converts;
   let num_failed_conversions = total_files - successful_converts in
   if num_failed_conversions = 0

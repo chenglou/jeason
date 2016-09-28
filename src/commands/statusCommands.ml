@@ -90,7 +90,7 @@ module Impl (CommandList : COMMAND_LIST) (Config : CONFIG) = struct
     }
 
   type args = {
-    root: Path.t;
+    root: PathFlow.t;
     from: string;
     output_json: bool;
     pretty: bool;
@@ -109,27 +109,27 @@ module Impl (CommandList : COMMAND_LIST) (Config : CONFIG) = struct
     | ServerProt.DIRECTORY_MISMATCH d ->
       Printf.printf "%s is running on a different directory.\n" name;
       Printf.printf "server_root: %s, client_root: %s\n"
-        (Path.to_string d.ServerProt.server)
-        (Path.to_string d.ServerProt.client);
+        (PathFlow.to_string d.ServerProt.server)
+        (PathFlow.to_string d.ServerProt.client);
       flush stdout;
       raise CommandExceptions.Server_directory_mismatch
     | ServerProt.ERRORS errors ->
       let error_flags = args.error_flags in
       let errors = if strip_root
-        then Errors.strip_root_from_errors args.root errors
+        then ErrorsFlow.strip_root_from_errors args.root errors
         else errors
       in
       begin if args.output_json then
-        Errors.print_error_json ~root:args.root ~pretty:args.pretty stdout errors
+        ErrorsFlow.print_error_json ~root:args.root ~pretty:args.pretty stdout errors
       else if args.from = "vim" || args.from = "emacs" then
-        Errors.print_error_deprecated stdout errors
+        ErrorsFlow.print_error_deprecated stdout errors
       else
-        Errors.print_error_summary ~strip_root ~flags:error_flags ~root:args.root errors
+        ErrorsFlow.print_error_summary ~strip_root ~flags:error_flags ~root:args.root errors
       end;
       FlowExitStatus.(exit Type_error)
     | ServerProt.NO_ERRORS ->
       if args.output_json
-      then Errors.print_error_json ~root:args.root ~pretty:args.pretty stdout []
+      then ErrorsFlow.print_error_json ~root:args.root ~pretty:args.pretty stdout []
       else Printf.printf "No errors!\n%!";
       FlowExitStatus.(exit No_error)
     | ServerProt.PONG ->
@@ -138,7 +138,7 @@ module Impl (CommandList : COMMAND_LIST) (Config : CONFIG) = struct
     | ServerProt.SERVER_DYING ->
       let msg = Utils_js.spf
         "Server has been killed for %s"
-        (Path.to_string args.root) in
+        (PathFlow.to_string args.root) in
       FlowExitStatus.(exit ~msg Server_dying)
     | ServerProt.SERVER_OUT_OF_DATE ->
       if server_flags.CommandUtils.no_auto_start

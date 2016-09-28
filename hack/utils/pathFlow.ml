@@ -35,7 +35,7 @@ let make path =
   | None -> path (* assert false? *)
 
 (**
- * Creates a Path without running it through `realpath`. This is unsafe because
+ * Creates a PathFlow without running it through `realpath`. This is unsafe because
  * it doesn't normalize symlinks, trailing slashes, or relative paths. The path
  * you pass here must be absolute, and free of symlinks (including ../).
  *)

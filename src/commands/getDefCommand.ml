@@ -81,11 +81,11 @@ let main option_values root json pretty strip_root path args () =
     (* TODO: this format is deprecated but can't be backwards-compatible.
        should be replaced with just `Reason.json_of_loc loc`. *)
     let open Hh_json in
-    let json = JSON_Object (Errors.deprecated_json_props_of_loc loc) in
+    let json = JSON_Object (ErrorsFlow.deprecated_json_props_of_loc loc) in
     print_endline (json_to_string ~pretty json)
   ) else
     if option_values.from = "vim" || option_values.from = "emacs"
-    then print_endline (Errors.string_of_loc_deprecated loc)
+    then print_endline (ErrorsFlow.string_of_loc_deprecated loc)
     else print_endline (range_string_of_loc loc)
 
 let command = CommandSpec.command spec main

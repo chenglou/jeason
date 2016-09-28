@@ -13,10 +13,10 @@ open Utils_js
 type t = {
   (* list of paths to match against. may contain wildcards.
      NOTE: stored in reverse-insertion order! *)
-  paths: Path.t list;
+  paths: PathFlow.t list;
   (* stems extracted from paths.
      NOTE: stored in reverse-insertion order! *)
-  stems: Path.t list;
+  stems: PathFlow.t list;
   (* map from stems to list of (original path, regexified path) *)
   stem_map: ((string * Str.regexp) list) PathMap.t;
 }
@@ -33,14 +33,14 @@ let path_stem =
   let wc = Str.regexp "^[^*?]*[*?]" in
   (fun path ->
     (* strip filename *)
-    let path = if Path.file_exists path && not (Path.is_directory path)
-      then Path.parent path else path in
-    let path_str = Path.to_string path in
+    let path = if PathFlow.file_exists path && not (PathFlow.is_directory path)
+      then PathFlow.parent path else path in
+    let path_str = PathFlow.to_string path in
     (* strip back to non-wc prefix *)
     let stem = if Str.string_match wc path_str 0
       then Filename.dirname (Str.matched_string path_str)
     else path_str in
-    Path.make stem)
+    PathFlow.make stem)
 
 (* translate a path with wildcards into a regex *)
 let path_patt =
@@ -48,7 +48,7 @@ let path_patt =
   let star2 = Str.regexp_string "**" in
   let qmark = Str.regexp_string "?" in
   fun path ->
-    let str = Path.to_string path in
+    let str = PathFlow.to_string path in
     (* because we accept both * and **, convert in 2 steps *)
     let results = Str.full_split star2 str in
     let results = List.map (fun r -> match r with
@@ -66,7 +66,7 @@ let path_patt =
    no other normalization is done *)
 let dir_sep = Str.regexp_string Filename.dir_sep
 let fixup_path p =
-  let s = Path.to_string p in
+  let s = PathFlow.to_string p in
   let is_normalized = match Sys_utils.realpath s with
       | Some s' -> s' = s
       | None -> false in
@@ -88,14 +88,14 @@ let fixup_path p =
   let entries = loop [] entries in
   let s = List.fold_left Filename.concat "" entries in
   let s = if abs then Filename.dir_sep ^ s else s in
-  Path.make s
+  PathFlow.make s
 
 (* adds `path` to the matcher, calculating the appropriate stem and pattern *)
 let add { paths; stems; stem_map; } path =
   let path = fixup_path path in
   let stem = path_stem path in
   let patt = path_patt path in
-  let pstr = Path.to_string path in
+  let pstr = PathFlow.to_string path in
   let stems, stem_map =
     match PathMap.get stem stem_map with
     | None ->
@@ -109,7 +109,7 @@ let add { paths; stems; stem_map; } path =
 
 (* filters a list of prefixes into only the prefixes with which f starts *)
 let find_prefixes f = List.filter (fun prefix ->
-  String_utils.string_starts_with f (Path.to_string prefix)
+  String_utils.string_starts_with f (PathFlow.to_string prefix)
 )
 
 (* find a match for f in a list of patterns, or none *)

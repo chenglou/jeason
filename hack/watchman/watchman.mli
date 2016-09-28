@@ -18,7 +18,7 @@ type watchman_instance =
 type init_settings = {
   subscribe_to_changes: bool;
   init_timeout: int;
-  root: Path.t;
+  root: PathFlow.t;
 }
 
 type 'a changes =
@@ -26,7 +26,7 @@ type 'a changes =
   | Watchman_pushed of 'a
   | Watchman_synchronous of 'a
 
-val crash_marker_path: Path.t -> string
+val crash_marker_path: PathFlow.t -> string
 
 val init: init_settings -> env option
 

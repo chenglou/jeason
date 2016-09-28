@@ -17,7 +17,7 @@ val convert: Context.t ->
   Spider_monkey_ast.Type.t ->
   Type.t
 
-val convert_qualification: ?lookup_mode:Env.LookupMode.t ->
+val convert_qualification: ?lookup_mode:EnvFlow.LookupMode.t ->
   Context.t ->
   string ->
   Spider_monkey_ast.Type.Generic.Identifier.t ->

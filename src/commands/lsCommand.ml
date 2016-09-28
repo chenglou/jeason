@@ -47,13 +47,13 @@ let get_ls_files ~subdir ~root ~strip_root ~ignore_flag ~include_flag =
 
   let opt_temp_dir =
     FlowConfig.(flowconfig.options.Opts.temp_dir)
-    |> Path.make
-    |> Path.to_string
+    |> PathFlow.make
+    |> PathFlow.to_string
   in
 
   let opt_shm_dirs =
     FlowConfig.(flowconfig.options.Opts.shm_dirs)
-    |> List.map Path.(fun s -> s |> make |> to_string)
+    |> List.map PathFlow.(fun s -> s |> make |> to_string)
   in
 
   let opt_shm_min_avail = FlowConfig.(flowconfig.options.Opts.shm_min_avail) in
@@ -171,7 +171,7 @@ let main strip_root ignore_flag include_flag root () =
       ~ignore_flag
       ~include_flag
   in
-  let root_str = spf "%s%s" (Path.to_string root) Filename.dir_sep in
+  let root_str = spf "%s%s" (PathFlow.to_string root) Filename.dir_sep in
   let normalize_filename filename =
     if not options.Options.opt_strip_root then filename
     else Files.relative_path root_str filename

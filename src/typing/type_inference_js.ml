@@ -24,9 +24,9 @@ let force_annotations cx =
   let m = Modulename.to_string (Context.module_name cx) in
   let tvar = Flow_js.lookup_module cx m in
   let _, id = Type.open_tvar tvar in
-  let before = Errors.ErrorSet.cardinal (Context.errors cx) in
+  let before = ErrorsFlow.ErrorSet.cardinal (Context.errors cx) in
   Flow_js.enforce_strict cx id;
-  let after = Errors.ErrorSet.cardinal (Context.errors cx) in
+  let after = ErrorsFlow.ErrorSet.cardinal (Context.errors cx) in
   if (after > before) then
     Context.add_tvar cx id Constraint.(Root {
       rank = 0; constraints = Resolved Type.AnyT.t
@@ -106,7 +106,7 @@ let infer_ast ~metadata ~filename ~module_name ast =
     scope
   ) in
 
-  Env.init_env cx module_scope;
+  EnvFlow.init_env cx module_scope;
 
   let reason = Reason.mk_reason "exports" Loc.({
     none with source = Some filename
@@ -164,7 +164,7 @@ let infer_lib_file ~metadata ~exclude_syms file statements comments =
     metadata file (Modulename.String Files.lib_module) in
 
   let module_scope = Scope.fresh () in
-  Env.init_env ~exclude_syms cx module_scope;
+  EnvFlow.init_env ~exclude_syms cx module_scope;
 
   infer_core cx statements;
   scan_for_suppressions cx comments;

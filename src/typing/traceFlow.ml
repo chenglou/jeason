@@ -113,7 +113,7 @@ let spaces n = String.make n ' '
 let pos_len ~prep_path r =
   let r = prep_path r in
   let loc = loc_of_reason r in
-  let str = Errors.format_info (loc, []) in
+  let str = ErrorsFlow.format_info (loc, []) in
   String.length str
 
 

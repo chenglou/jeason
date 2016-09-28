@@ -26,7 +26,7 @@ type metadata = {
   max_trace_depth: int;
   munge_underscores: bool;
   output_graphml: bool;
-  root: Path.t;
+  root: PathFlow.t;
   strip_root: bool;
   suppress_comments: Str.regexp list;
   suppress_types: SSet.t;
@@ -73,10 +73,10 @@ type t = {
   (* map from module names to their types *)
   mutable modulemap: Type.t SMap.t;
 
-  mutable errors: Errors.ErrorSet.t;
+  mutable errors: ErrorsFlow.ErrorSet.t;
   mutable globals: SSet.t;
 
-  mutable error_suppressions: Errors.ErrorSuppressions.t;
+  mutable error_suppressions: ErrorsFlow.ErrorSuppressions.t;
 
   type_table: (Loc.t, Type.t) Hashtbl.t;
   annot_table: (Loc.t, Type.t) Hashtbl.t;
@@ -140,10 +140,10 @@ let make metadata file module_name = {
   all_unresolved = IMap.empty;
   modulemap = SMap.empty;
 
-  errors = Errors.ErrorSet.empty;
+  errors = ErrorsFlow.ErrorSet.empty;
   globals = SSet.empty;
 
-  error_suppressions = Errors.ErrorSuppressions.empty;
+  error_suppressions = ErrorsFlow.ErrorSuppressions.empty;
 
   type_table = Hashtbl.create 0;
   annot_table = Hashtbl.create 0;
@@ -215,10 +215,10 @@ let copy_of_context cx = { cx with
 let add_env cx frame env =
   cx.envs <- IMap.add frame env cx.envs
 let add_error cx error =
-  cx.errors <- Errors.ErrorSet.add error cx.errors
+  cx.errors <- ErrorsFlow.ErrorSet.add error cx.errors
 let add_error_suppression cx loc =
   cx.error_suppressions <-
-    Errors.ErrorSuppressions.add loc cx.error_suppressions
+    ErrorsFlow.ErrorSuppressions.add loc cx.error_suppressions
 let add_global cx name =
   cx.globals <- SSet.add name cx.globals
 let add_import_stmt cx stmt =
@@ -237,9 +237,9 @@ let add_tvar cx id bounds =
 let add_tvar_reason cx id reason =
   cx.tvar_reasons <- IMap.add id reason cx.tvar_reasons
 let remove_all_errors cx =
-  cx.errors <- Errors.ErrorSet.empty
+  cx.errors <- ErrorsFlow.ErrorSet.empty
 let remove_all_error_suppressions cx =
-  cx.error_suppressions <- Errors.ErrorSuppressions.empty
+  cx.error_suppressions <- ErrorsFlow.ErrorSuppressions.empty
 let remove_tvar cx id =
   cx.graph <- IMap.remove id cx.graph
 let set_all_unresolved cx all_unresolved =

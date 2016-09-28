@@ -30,7 +30,7 @@ let spec = {
 }
 
 type args = {
-  root: Path.t;
+  root: PathFlow.t;
   files: string list;
 }
 

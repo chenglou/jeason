@@ -11,7 +11,7 @@
 module Ast = Spider_monkey_ast
 
 (*
- * type refinements on expressions - wraps Env API
+ * type refinements on expressions - wraps EnvFlow API
  *)
 
 (* if expression is syntactically eligible for type refinement,
@@ -73,5 +73,5 @@ let rec key = Ast.Expression.(function
 (* get type refinement for expression, if it exists *)
 let get cx expr reason =
   match key expr with
-  | Some k -> Env.get_refinement cx k reason
+  | Some k -> EnvFlow.get_refinement cx k reason
   | None -> None

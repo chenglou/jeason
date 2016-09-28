@@ -40,7 +40,7 @@ let check_ast ast =
       )
       |> String.concat "\n"
     in
-    false, (spf "****AST Types Errors****\n%s" output)
+    false, (spf "****AST Types ErrorsFlow****\n%s" output)
   else
     true, ""
 
@@ -141,7 +141,7 @@ let check_errors (errors: (Loc.t * Parse_error.t) list) (spec:json) =
       )
       |> String.concat "\n"
     in
-    false, spf "****Unexpected Errors****\n%s" errors_str
+    false, spf "****Unexpected ErrorsFlow****\n%s" errors_str
   end
   else
     true, ""

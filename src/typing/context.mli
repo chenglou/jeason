@@ -25,7 +25,7 @@ type metadata = {
   max_trace_depth: int;
   munge_underscores: bool;
   output_graphml: bool;
-  root: Path.t;
+  root: PathFlow.t;
   strip_root: bool;
   suppress_comments: Str.regexp list;
   suppress_types: SSet.t;
@@ -48,8 +48,8 @@ val enable_const_params: t -> bool
 val enable_unsafe_getters_and_setters: t -> bool
 val enforce_strict_type_args: t -> bool
 val envs: t -> env IMap.t
-val errors: t -> Errors.ErrorSet.t
-val error_suppressions: t -> Errors.ErrorSuppressions.t
+val errors: t -> ErrorsFlow.ErrorSet.t
+val error_suppressions: t -> ErrorsFlow.ErrorSuppressions.t
 val esproposal_class_static_fields: t -> Options.esproposal_feature_mode
 val esproposal_class_instance_fields: t -> Options.esproposal_feature_mode
 val esproposal_decorators: t -> Options.esproposal_feature_mode
@@ -74,7 +74,7 @@ val output_graphml: t -> bool
 val property_maps: t -> Type.properties IMap.t
 val required: t -> SSet.t
 val require_loc: t -> Loc.t SMap.t
-val root: t -> Path.t
+val root: t -> PathFlow.t
 val facebook_fbt: t -> string option
 val should_ignore_non_literal_requires: t -> bool
 val should_munge_underscores: t -> bool
@@ -92,7 +92,7 @@ val merge_into: t -> t -> unit
 
 (* mutators *)
 val add_env: t -> int -> env -> unit
-val add_error: t -> Errors.error -> unit
+val add_error: t -> ErrorsFlow.error -> unit
 val add_error_suppression: t -> Loc.t -> unit
 val add_global: t -> string -> unit
 val add_import_stmt: t -> Spider_monkey_ast.Statement.ImportDeclaration.t -> unit

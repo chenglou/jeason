@@ -13,8 +13,8 @@ open Utils_js
 val infer:
   options: Options.t ->
   workers: Worker.t list option ->
-  save_errors: (filename list -> Errors.ErrorSet.t list -> unit) ->
-  save_suppressions: (filename list -> Errors.ErrorSuppressions.t list -> unit) ->
+  save_errors: (filename list -> ErrorsFlow.ErrorSet.t list -> unit) ->
+  save_suppressions: (filename list -> ErrorsFlow.ErrorSuppressions.t list -> unit) ->
   FilenameSet.t ->
   filename list
 

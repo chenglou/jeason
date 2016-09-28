@@ -24,7 +24,7 @@ module Iface_sig = Class_sig (* same thing, mo'less *)
 open Utils_js
 open Reason
 open Type
-open Env.LookupMode
+open EnvFlow.LookupMode
 
 open Destructuring
 open Import_export
@@ -95,10 +95,10 @@ let warn_or_ignore_export_star_as cx name =
 let rec variable_decl cx entry = Ast.Statement.(
   let value_kind, bind = match entry.VariableDeclaration.kind with
     | VariableDeclaration.Const ->
-      Scope.Entry.(Const ConstVarBinding), Env.bind_const
+      Scope.Entry.(Const ConstVarBinding), EnvFlow.bind_const
     | VariableDeclaration.Let ->
-      Scope.(Entry.Let Entry.LetVarBinding), Env.bind_let
-    | VariableDeclaration.Var -> Scope.Entry.Var, Env.bind_var
+      Scope.(Entry.Let Entry.LetVarBinding), EnvFlow.bind_let
+    | VariableDeclaration.Var -> Scope.Entry.Var, EnvFlow.bind_var
   in
 
   let str_of_kind = Scope.Entry.string_of_value_kind value_kind in
@@ -147,7 +147,7 @@ and toplevel_decls cx =
 and statement_decl cx = Ast.Statement.(
 
   let block_body cx { Block.body } =
-    Env.in_lex_scope cx (fun () ->
+    EnvFlow.in_lex_scope cx (fun () ->
       toplevel_decls cx body
     )
   in
@@ -186,10 +186,10 @@ and statement_decl cx = Ast.Statement.(
       let name_loc, { Ast.Identifier.name; _ } = id in
       let r = DescFormat.type_reason name name_loc in
       let tvar = Flow.mk_tvar cx r in
-      Env.bind_type cx name tvar r
+      EnvFlow.bind_type cx name tvar r
 
   | (_, Switch { Switch.cases; _ }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         cases |> List.iter (fun (_, { Switch.Case.consequent; _ }) ->
           toplevel_decls cx consequent
         )
@@ -219,7 +219,7 @@ and statement_decl cx = Ast.Statement.(
       statement_decl cx body
 
   | (_, For { For.init; body; _ }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         (match init with
           | Some (For.InitDeclaration (_, decl)) ->
               variable_decl cx decl
@@ -229,7 +229,7 @@ and statement_decl cx = Ast.Statement.(
       )
 
   | (_, ForIn { ForIn.left; body; _ }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         (match left with
           | ForIn.LeftDeclaration (_, decl) ->
               variable_decl cx decl
@@ -239,7 +239,7 @@ and statement_decl cx = Ast.Statement.(
       )
 
   | (_, ForOf { ForOf.left; body; _ }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         (match left with
           | ForOf.LeftDeclaration (_, decl) ->
               variable_decl cx decl
@@ -260,7 +260,7 @@ and statement_decl cx = Ast.Statement.(
         let desc = function_desc ~async ~generator (spf "function %s" name) in
         let r = mk_reason desc loc in
         let tvar = Flow.mk_tvar cx r in
-        Env.bind_fun cx name tvar r
+        EnvFlow.bind_fun cx name tvar r
       | None ->
         failwith (
           "Flow Error: Nameless function declarations should always be given " ^
@@ -273,7 +273,7 @@ and statement_decl cx = Ast.Statement.(
       let r = mk_reason (spf "declare %s" name) loc in
       let t = Anno.mk_type_annotation cx SMap.empty r typeAnnotation in
       Hashtbl.replace (Context.type_table cx) loc t;
-      Env.bind_declare_var cx name t r
+      EnvFlow.bind_declare_var cx name t r
 
   | (loc, DeclareFunction { DeclareFunction.id; DeclareFunction.predicate}) ->
       let _, { Ast.Identifier.name; typeAnnotation; _; } = id in
@@ -282,7 +282,7 @@ and statement_decl cx = Ast.Statement.(
           let r = mk_reason (spf "declare %s" name) loc in
           let t = Anno.mk_type_annotation cx SMap.empty r typeAnnotation in
           Hashtbl.replace (Context.type_table cx) loc t;
-          Env.bind_declare_fun cx name t r
+          EnvFlow.bind_declare_fun cx name t r
       | Some func_decl ->
           statement_decl cx (loc, func_decl)
       )
@@ -296,7 +296,7 @@ and statement_decl cx = Ast.Statement.(
         let name_loc, { Ast.Identifier.name; _ } = id in
         let r = mk_reason (spf "class `%s`" name) name_loc in
         let tvar = Flow.mk_tvar cx r in
-        Env.bind_implicit_let Scope.Entry.ClassNameBinding cx name tvar r
+        EnvFlow.bind_implicit_let Scope.Entry.ClassNameBinding cx name tvar r
       | None -> ()
     )
 
@@ -310,8 +310,8 @@ and statement_decl cx = Ast.Statement.(
       let tvar = Flow.mk_tvar cx r in
       (* interface is a type alias, declare class is a var *)
       if is_interface
-      then Env.bind_type cx name tvar r
-      else Env.bind_declare_var cx name tvar r
+      then EnvFlow.bind_type cx name tvar r
+      else EnvFlow.bind_declare_var cx name tvar r
 
   | (loc, DeclareModule { DeclareModule.id; _ }) ->
       let name = match id with
@@ -327,7 +327,7 @@ and statement_decl cx = Ast.Statement.(
       let r = mk_reason (spf "module `%s`" name) loc in
       let t = Flow.mk_tvar cx r in
       Hashtbl.replace (Context.type_table cx) loc t;
-      Env.bind_declare_var cx (internal_module_name name) t r
+      EnvFlow.bind_declare_var cx (internal_module_name name) t r
 
   | _,
     DeclareExportDeclaration {
@@ -422,8 +422,8 @@ and statement_decl cx = Ast.Statement.(
         let tvar = Flow.mk_tvar cx reason in
         let state = Scope.State.Initialized in
         if isType
-        then Env.bind_type ~state cx local_name tvar reason
-        else Env.bind_var ~state cx local_name tvar reason
+        then EnvFlow.bind_type ~state cx local_name tvar reason
+        else EnvFlow.bind_var ~state cx local_name tvar reason
       )
 )
 
@@ -500,7 +500,7 @@ and statement cx = Ast.Statement.(
     Flow.unify cx self interface_t;
     Hashtbl.replace (Context.type_table cx) loc interface_t;
     (* interface is a type alias, declare class is a var *)
-    Env.(if structural then init_type else init_var ~has_anno:false)
+    EnvFlow.(if structural then init_type else init_var ~has_anno:false)
       cx name interface_t reason
   in
 
@@ -514,8 +514,8 @@ and statement cx = Ast.Statement.(
 
           Hashtbl.replace (Context.type_table cx) loc t;
 
-          (match Env.in_lex_scope cx (fun () ->
-            Scope.(Env.bind_implicit_let
+          (match EnvFlow.in_lex_scope cx (fun () ->
+            Scope.(EnvFlow.bind_implicit_let
               ~state:State.Initialized Entry.CatchParamBinding cx name t r);
 
             Abnormal.catch_control_flow_exception (fun () ->
@@ -542,7 +542,7 @@ and statement cx = Ast.Statement.(
   | (_, Empty) -> ()
 
   | (_, Block { Block.body }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         toplevel_decls cx body;
         toplevels cx body
       )
@@ -566,11 +566,11 @@ and statement cx = Ast.Statement.(
 
       (* grab a reference to the incoming env -
          we'll restore it and merge branched envs later *)
-      let start_env =  Env.peek_env () in
+      let start_env =  EnvFlow.peek_env () in
       let oldset = Changeset.clear () in
 
       (* swap in a refined clone of initial env for then *)
-      Env.(
+      EnvFlow.(
         update_env cx reason (clone_env start_env);
         ignore (refine_with_preds cx reason preds xts)
       );
@@ -580,10 +580,10 @@ and statement cx = Ast.Statement.(
       in
 
       (* grab a reference to env after then branch *)
-      let then_env = Env.peek_env () in
+      let then_env = EnvFlow.peek_env () in
 
       (* then swap in a refined clone of initial env for else *)
-      Env.(
+      EnvFlow.(
         update_env cx reason (clone_env start_env);
         ignore (refine_with_preds cx reason not_preds xts)
       );
@@ -596,7 +596,7 @@ and statement cx = Ast.Statement.(
       in
 
       (* grab a reference to env after else branch *)
-      let else_env = Env.peek_env () in
+      let else_env = EnvFlow.peek_env () in
 
       (* snapshot if-else changes and merge old changes back into state *)
       let newset = Changeset.merge oldset in
@@ -613,10 +613,10 @@ and statement cx = Ast.Statement.(
         then_env
 
       | _ ->
-        Env.merge_env cx reason (start_env, then_env, else_env) newset;
+        EnvFlow.merge_env cx reason (start_env, then_env, else_env) newset;
         start_env
       in
-      Env.update_env cx reason end_env;
+      EnvFlow.update_env cx reason end_env;
 
       (* handle control flow in cases where we've thrown from both sides *)
       begin match exception_then, exception_else with
@@ -643,11 +643,11 @@ and statement cx = Ast.Statement.(
         let save_break = Abnormal.clear_saved (Abnormal.Break label) in
         let save_continue = Abnormal.clear_saved (Abnormal.Continue label) in
 
-        let env = Env.peek_env () in
-        Env.widen_env cx reason;
+        let env = EnvFlow.peek_env () in
+        EnvFlow.widen_env cx reason;
 
-        let loop_env = Env.clone_env env in
-        Env.update_env cx reason loop_env;
+        let loop_env = EnvFlow.clone_env env in
+        EnvFlow.update_env cx reason loop_env;
 
         Abnormal.(
           check_control_flow_exception (
@@ -657,12 +657,12 @@ and statement cx = Ast.Statement.(
         let newset = Changeset.merge oldset in
 
         if Abnormal.swap_saved (Abnormal.Continue label) save_continue <> None
-        then Env.havoc_vars newset;
+        then EnvFlow.havoc_vars newset;
 
-        Env.copy_env cx reason (env,loop_env) newset;
+        EnvFlow.copy_env cx reason (env,loop_env) newset;
 
         if Abnormal.swap_saved (Abnormal.Break label) save_break <> None
-        then Env.havoc_vars newset
+        then EnvFlow.havoc_vars newset
 
       | _ ->
         let oldset = Changeset.clear () in
@@ -676,16 +676,16 @@ and statement cx = Ast.Statement.(
 
         let newset = Changeset.merge oldset in
         if Abnormal.swap_saved (Abnormal.Break label) save_break <> None
-        then Env.havoc_vars newset
+        then EnvFlow.havoc_vars newset
       )
 
   | (loc, Break { Break.label }) ->
       (* save environment at unlabeled breaks, prior to activation clearing *)
       let label_opt, env = match label with
-        | None -> None, Env.(clone_env (peek_env ()))
+        | None -> None, EnvFlow.(clone_env (peek_env ()))
         | Some (_, { Ast.Identifier.name; _ }) -> Some name, []
       in
-      Env.reset_current_activation (mk_reason "break" loc);
+      EnvFlow.reset_current_activation (mk_reason "break" loc);
       Abnormal.save_and_throw (Abnormal.Break label_opt) ~env
 
   | (loc, Continue { Continue.label }) ->
@@ -693,7 +693,7 @@ and statement cx = Ast.Statement.(
         | None -> None
         | Some (_, { Ast.Identifier.name; _ }) -> Some name
       in
-      Env.reset_current_activation (mk_reason "continue" loc);
+      EnvFlow.reset_current_activation (mk_reason "continue" loc);
       Abnormal.save_and_throw (Abnormal.Continue label_opt)
 
   | (_, With _) ->
@@ -712,7 +712,7 @@ and statement cx = Ast.Statement.(
         else PolyT(typeparams, TypeT (r, t))
       in
       Hashtbl.replace (Context.type_table cx) loc type_;
-      Env.init_type cx name type_ r
+      EnvFlow.init_type cx name type_ r
 
   (*******************************************************)
 
@@ -729,11 +729,11 @@ and statement cx = Ast.Statement.(
     ignore (expression cx discriminant);
 
     (* switch body is a single lexical scope *)
-    Env.in_lex_scope cx (fun () ->
+    EnvFlow.in_lex_scope cx (fun () ->
 
       (* save incoming env state, clear changeset *)
       let incoming_changes = Changeset.clear () in
-      let incoming_env = Env.peek_env () in
+      let incoming_env = EnvFlow.peek_env () in
       let incoming_depth = List.length incoming_env in
 
       (* set up all bindings *)
@@ -743,7 +743,7 @@ and statement cx = Ast.Statement.(
 
       (** each case starts with this env - begins as clone of incoming_env
           plus bindings, also accumulates negative refis from case tests *)
-      let case_start_env = Env.clone_env incoming_env in
+      let case_start_env = EnvFlow.clone_env incoming_env in
 
       (* Some (env, writes, refis, reason) when a case falls through *)
       let fallthrough_case = ref None in
@@ -760,7 +760,7 @@ and statement cx = Ast.Statement.(
           let partial_writes = Changeset.union partial_writes case_diff in
           let total_writes = Changeset.inter case_writes total_writes in
           (* merge new case into switch env *)
-          Env.merge_env cx reason (env, env, case_env) case_writes;
+          EnvFlow.merge_env cx reason (env, env, case_env) case_writes;
           env, partial_writes, total_writes
         in switch_state := Some state
       in
@@ -784,17 +784,17 @@ and statement cx = Ast.Statement.(
         in
 
         (* swap in case's starting env and clear changeset *)
-        let case_env = Env.clone_env case_start_env in
-        Env.update_env cx reason case_env;
+        let case_env = EnvFlow.clone_env case_start_env in
+        EnvFlow.update_env cx reason case_env;
         let save_changes = Changeset.clear () in
 
         (* add test refinements - save changelist for later *)
-        let test_refis = Env.refine_with_preds cx reason preds xtypes in
+        let test_refis = EnvFlow.refine_with_preds cx reason preds xtypes in
 
         (* merge env changes from fallthrough case, if present *)
         Option.iter !fallthrough_case ~f:(fun (env, writes, refis, _) ->
           let chg = Changeset.union writes refis in
-          Env.merge_env cx reason (case_env, case_env, env) chg
+          EnvFlow.merge_env cx reason (case_env, case_env, env) chg
         );
 
         (** process statements, track control flow exits: exit will be an
@@ -840,8 +840,8 @@ and statement cx = Ast.Statement.(
 
         (* add negative refis of this case's test to common start env *)
         (* TODO add API to do this without having to swap in env *)
-        Env.update_env cx reason case_start_env;
-        let _ = Env.refine_with_preds cx reason not_preds xtypes in
+        EnvFlow.update_env cx reason case_start_env;
+        let _ = EnvFlow.refine_with_preds cx reason not_preds xtypes in
 
         exit
       ) in
@@ -853,8 +853,8 @@ and statement cx = Ast.Statement.(
         original types for partially written values, and swap env in *)
     Option.iter !switch_state ~f:(fun (env, partial_writes, _) ->
       let reason = mk_reason "switch" switch_loc in
-      Env.merge_env cx reason (env, env, incoming_env) partial_writes;
-      Env.update_env cx reason env);
+      EnvFlow.merge_env cx reason (env, env, incoming_env) partial_writes;
+      EnvFlow.update_env cx reason env);
 
     (* merge original changeset back in *)
     let _ = Changeset.merge incoming_changes in
@@ -900,12 +900,12 @@ and statement cx = Ast.Statement.(
   | (loc, Return { Return.argument }) ->
       let reason = mk_reason "return" loc in
       let ret =
-        Env.get_var cx (internal_name "return") reason
+        EnvFlow.get_var cx (internal_name "return") reason
       in
       let t = match argument with
         | None -> VoidT.at loc
         | Some expr ->
-          if Env.in_predicate_scope () then
+          if EnvFlow.in_predicate_scope () then
             let (t, p_map, n_map, _) = predicates_of_condition cx expr in
             let pred_reason = prefix_reason "predicate of " reason in
             OpenPredT (pred_reason, t, p_map, n_map)
@@ -913,7 +913,7 @@ and statement cx = Ast.Statement.(
             expression cx expr
       in
       let t =
-        if Env.in_async_scope () then
+        if EnvFlow.in_async_scope () then
           (* Convert the return expression's type T to Promise<T>. If the
            * expression type is itself a Promise<T>, ensure we still return
            * a Promise<T> via Promise.resolve. *)
@@ -926,25 +926,25 @@ and statement cx = Ast.Statement.(
               Flow.flow cx (funt, CallT (reason, callt))
             )
           ]
-        else if Env.in_generator_scope () then
+        else if EnvFlow.in_generator_scope () then
           (* Convert the return expression's type R to Generator<Y,R,N>, where
            * Y and R are internals, installed earlier. *)
           let reason = mk_reason "generator return" loc in
           Flow.get_builtin_typeapp cx reason "Generator" [
-            Env.get_var cx (internal_name "yield") reason;
+            EnvFlow.get_var cx (internal_name "yield") reason;
             t;
-            Env.get_var cx (internal_name "next") reason
+            EnvFlow.get_var cx (internal_name "next") reason
           ]
         else t
       in
       Flow.flow cx (t, UseT (FunReturn, ret));
-      Env.reset_current_activation reason;
+      EnvFlow.reset_current_activation reason;
       Abnormal.save_and_throw Abnormal.Return
 
   | (loc, Throw { Throw.argument }) ->
       let reason = mk_reason "throw" loc in
       ignore (expression cx argument);
-      Env.reset_current_activation reason;
+      EnvFlow.reset_current_activation reason;
       Abnormal.save_and_throw Abnormal.Throw
 
   (***************************************************************************)
@@ -1012,10 +1012,10 @@ and statement cx = Ast.Statement.(
       let oldset = Changeset.clear () in
 
       (* save ref to initial env and swap in a clone *)
-      let start_env = Env.peek_env () in
-      Env.(update_env cx reason (clone_env start_env));
+      let start_env = EnvFlow.peek_env () in
+      EnvFlow.(update_env cx reason (clone_env start_env));
 
-      let exception_try = Env.in_lex_scope cx (fun () ->
+      let exception_try = EnvFlow.in_lex_scope cx (fun () ->
         Abnormal.catch_control_flow_exception (fun () ->
           toplevel_decls cx b.Block.body;
           toplevels cx b.Block.body
@@ -1023,7 +1023,7 @@ and statement cx = Ast.Statement.(
       ) in
 
       (* save ref to env at end of try *)
-      let try_env = Env.peek_env () in
+      let try_env = EnvFlow.peek_env () in
 
       (* traverse catch block, save exceptions *)
       let exception_catch = match handler with
@@ -1034,7 +1034,7 @@ and statement cx = Ast.Statement.(
       | Some (_, h) ->
         (* if try throws to here, we need an env that's conservative
            over everything that happened from start_env to try_env *)
-        Env.(
+        EnvFlow.(
           let e = clone_env start_env in
           merge_env cx reason (e, e, try_env) (Changeset.peek ());
           update_env cx reason e
@@ -1045,10 +1045,10 @@ and statement cx = Ast.Statement.(
       in
 
       (* save ref to env at end of catch *)
-      let catch_env = Env.peek_env () in
+      let catch_env = EnvFlow.peek_env () in
 
       (* build initial env for non-throwing finally *)
-      let nonthrow_finally_env = Env.(match exception_catch with
+      let nonthrow_finally_env = EnvFlow.(match exception_catch with
       | None ->
         (* if catch ends normally, then non-throwing finally can be
            reached via it or a non-throwing try. merge terminal states *)
@@ -1066,7 +1066,7 @@ and statement cx = Ast.Statement.(
          (in which subsequent code is reachable) *)
       let exception_finally = match finalizer with
       | None ->
-        Env.update_env cx reason nonthrow_finally_env;
+        EnvFlow.update_env cx reason nonthrow_finally_env;
         None
 
       | Some (_, { Block.body }) ->
@@ -1074,13 +1074,13 @@ and statement cx = Ast.Statement.(
 
         (* 1. throwing-finally case. *)
         (* env may be in any state from start of try through end of catch *)
-        Env.(
+        EnvFlow.(
           let e = clone_env start_env in
           merge_env cx reason (e, e, catch_env) (Changeset.peek ());
           update_env cx reason e
         );
 
-        let result = Env.in_lex_scope cx (fun () ->
+        let result = EnvFlow.in_lex_scope cx (fun () ->
           Abnormal.catch_control_flow_exception (fun () ->
             toplevel_decls cx body;
             toplevels cx body
@@ -1088,10 +1088,10 @@ and statement cx = Ast.Statement.(
         ) in
 
         (* 2. non-throwing finally case. *)
-        Env.update_env cx reason nonthrow_finally_env;
+        EnvFlow.update_env cx reason nonthrow_finally_env;
 
         (* (exceptions will be the same in both cases) *)
-        let _ = Env.in_lex_scope cx (fun () ->
+        let _ = EnvFlow.in_lex_scope cx (fun () ->
           Abnormal.catch_control_flow_exception (fun () ->
             toplevel_decls cx body;
             toplevels cx body
@@ -1144,13 +1144,13 @@ and statement cx = Ast.Statement.(
       let oldset = Changeset.clear () in
 
       (* widen_env wraps specifics in tvars, anticipating widening inflows *)
-      Env.widen_env cx reason;
+      EnvFlow.widen_env cx reason;
 
       (* start_env is Pre above: env as of loop top *)
-      let start_env = Env.peek_env () in
+      let start_env = EnvFlow.peek_env () in
 
       (* swap in Pre & c *)
-      Env.(
+      EnvFlow.(
         update_env cx reason (clone_env start_env);
         ignore (refine_with_preds cx reason preds orig_types)
       );
@@ -1160,19 +1160,19 @@ and statement cx = Ast.Statement.(
         (fun () -> statement cx body));
 
       (* save ref to env after loop body *)
-      let body_env = Env.peek_env () in
+      let body_env = EnvFlow.peek_env () in
 
       (* save loop body changeset to newset, install merged changes *)
       let newset = Changeset.merge oldset in
 
       (* if we continued out of the loop, havoc vars changed by loop body *)
       if Abnormal.swap_saved (Abnormal.Continue None) save_continue <> None
-      then Env.havoc_vars newset;
+      then EnvFlow.havoc_vars newset;
 
       (* widen start_env with new specifics from body_env
          (turning Pre into Pre' = Pre | Post')
          then reinstall and add ~c to make Post *)
-      Env.(
+      EnvFlow.(
         copy_env cx reason (start_env, body_env) newset;
         update_env cx reason start_env;
         ignore (refine_with_preds cx reason not_preds orig_types)
@@ -1180,7 +1180,7 @@ and statement cx = Ast.Statement.(
 
       (* if we broke out of the loop, havoc vars changed by loop body *)
       if Abnormal.swap_saved (Abnormal.Break None) save_break <> None
-      then Env.havoc_vars newset
+      then EnvFlow.havoc_vars newset
 
   (***************************************************************************)
   (* Refinements for `do-while` are derived by the following Hoare logic rule:
@@ -1196,16 +1196,16 @@ and statement cx = Ast.Statement.(
       let reason = mk_reason "do-while" loc in
       let save_break = Abnormal.clear_saved (Abnormal.Break None) in
       let save_continue = Abnormal.clear_saved (Abnormal.Continue None) in
-      let env =  Env.peek_env () in
+      let env =  EnvFlow.peek_env () in
       let oldset = Changeset.clear () in
       (* env = Pre *)
       (* ENV = [env] *)
 
-      Env.widen_env cx reason;
+      EnvFlow.widen_env cx reason;
       (* env = Pre', Pre' > Pre *)
 
-      let body_env = Env.clone_env env in
-      Env.update_env cx reason body_env;
+      let body_env = EnvFlow.clone_env env in
+      EnvFlow.update_env cx reason body_env;
       (* body_env = Pre' *)
       (* ENV = [body_env] *)
 
@@ -1215,26 +1215,26 @@ and statement cx = Ast.Statement.(
       ) in
 
       if Abnormal.swap_saved (Abnormal.Continue None) save_continue <> None
-      then Env.havoc_vars (Changeset.peek ());
+      then EnvFlow.havoc_vars (Changeset.peek ());
 
       let _, preds, not_preds, xtypes =
         predicates_of_condition cx test in
       (* body_env = Post' *)
 
-      let done_env = Env.clone_env body_env in
+      let done_env = EnvFlow.clone_env body_env in
       (* done_env = Post' *)
 
-      let _ = Env.refine_with_preds cx reason preds xtypes in
+      let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
       (* body_env = Post' & c *)
 
       let newset = Changeset.merge oldset in
-      Env.copy_env cx reason (env, body_env) newset;
+      EnvFlow.copy_env cx reason (env, body_env) newset;
       (* Pre' > Post' & c *)
 
-      Env.update_env cx reason done_env;
-      let _ = Env.refine_with_preds cx reason not_preds xtypes in
+      EnvFlow.update_env cx reason done_env;
+      let _ = EnvFlow.refine_with_preds cx reason not_preds xtypes in
       if Abnormal.swap_saved (Abnormal.Break None) save_break <> None
-      then Env.havoc_vars newset;
+      then EnvFlow.havoc_vars newset;
       (* ENV = [done_env] *)
       (* done_env = Post' & ~c *)
 
@@ -1254,7 +1254,7 @@ and statement cx = Ast.Statement.(
   *)
   (***************************************************************************)
   | (loc, For { For.init; test; update; body }) ->
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
         let reason = mk_reason "for" loc in
         let save_break = Abnormal.clear_saved (Abnormal.Break None) in
         let save_continue = Abnormal.clear_saved (Abnormal.Continue None) in
@@ -1267,12 +1267,12 @@ and statement cx = Ast.Statement.(
               ignore (expression cx expr)
         );
 
-        let env =  Env.peek_env () in
+        let env =  EnvFlow.peek_env () in
         let oldset = Changeset.clear () in
-        Env.widen_env cx reason;
+        EnvFlow.widen_env cx reason;
 
-        let do_env = Env.clone_env env in
-        Env.update_env cx reason do_env;
+        let do_env = EnvFlow.clone_env env in
+        EnvFlow.update_env cx reason do_env;
 
         let _, preds, not_preds, xtypes = match test with
           | None ->
@@ -1282,15 +1282,15 @@ and statement cx = Ast.Statement.(
               predicates_of_condition cx expr
         in
 
-        let body_env = Env.clone_env do_env in
-        Env.update_env cx reason body_env;
-        let _ = Env.refine_with_preds cx reason preds xtypes in
+        let body_env = EnvFlow.clone_env do_env in
+        EnvFlow.update_env cx reason body_env;
+        let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
 
         ignore (Abnormal.catch_control_flow_exception
           (fun () -> statement cx body));
 
         if Abnormal.swap_saved (Abnormal.Continue None) save_continue <> None
-        then Env.havoc_vars (Changeset.peek ());
+        then EnvFlow.havoc_vars (Changeset.peek ());
 
         (match update with
           | None -> ()
@@ -1299,12 +1299,12 @@ and statement cx = Ast.Statement.(
         );
 
         let newset = Changeset.merge oldset in
-        Env.copy_env cx reason (env, body_env) newset;
+        EnvFlow.copy_env cx reason (env, body_env) newset;
 
-        Env.update_env cx reason do_env;
-        let _ = Env.refine_with_preds cx reason not_preds xtypes in
+        EnvFlow.update_env cx reason do_env;
+        let _ = EnvFlow.refine_with_preds cx reason not_preds xtypes in
         if Abnormal.swap_saved (Abnormal.Break None) save_break <> None
-        then Env.havoc_vars newset
+        then EnvFlow.havoc_vars newset
       )
 
   (***************************************************************************)
@@ -1326,18 +1326,18 @@ and statement cx = Ast.Statement.(
       let o = Flow.mk_object cx (mk_reason "iteration expected on object" loc)
       in Flow.flow_t cx (t, MaybeT o); (* null/undefined are allowed *)
 
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
 
-        let env =  Env.peek_env () in
+        let env =  EnvFlow.peek_env () in
         let oldset = Changeset.clear () in
-        Env.widen_env cx reason;
+        EnvFlow.widen_env cx reason;
 
-        let body_env = Env.clone_env env in
-        Env.update_env cx reason body_env;
+        let body_env = EnvFlow.clone_env env in
+        EnvFlow.update_env cx reason body_env;
 
         let _, preds, _, xtypes =
           predicates_of_condition cx right in
-        let _ = Env.refine_with_preds cx reason preds xtypes in
+        let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
 
         (match left with
           | ForIn.LeftDeclaration (_, ({ VariableDeclaration.
@@ -1349,7 +1349,7 @@ and statement cx = Ast.Statement.(
           | ForIn.LeftExpression (loc, Ast.Expression.Identifier ident) ->
               let name = ident_name ident in
               let reason = mk_reason (spf "for..in `%s`" name) loc in
-              ignore Env.(set_var cx name (StrT.at loc) reason)
+              ignore EnvFlow.(set_var cx name (StrT.at loc) reason)
 
           | _ ->
               let msg = "unexpected LHS in for...in" in
@@ -1362,12 +1362,12 @@ and statement cx = Ast.Statement.(
         let newset = Changeset.merge oldset in
 
         if Abnormal.swap_saved (Abnormal.Continue None) save_continue <> None
-        then Env.havoc_vars newset;
-        Env.copy_env cx reason (env,body_env) newset;
+        then EnvFlow.havoc_vars newset;
+        EnvFlow.copy_env cx reason (env,body_env) newset;
 
-        Env.update_env cx reason env;
+        EnvFlow.update_env cx reason env;
         if Abnormal.swap_saved (Abnormal.Break None) save_break <> None
-        then Env.havoc_vars newset
+        then EnvFlow.havoc_vars newset
       )
 
   | (loc, ForOf { ForOf.left; right; body; }) ->
@@ -1385,18 +1385,18 @@ and statement cx = Ast.Statement.(
 
       Flow.flow_t cx (t, o); (* null/undefined are NOT allowed *)
 
-      Env.in_lex_scope cx (fun () ->
+      EnvFlow.in_lex_scope cx (fun () ->
 
-        let env =  Env.peek_env () in
+        let env =  EnvFlow.peek_env () in
         let oldset = Changeset.clear () in
-        Env.widen_env cx reason;
+        EnvFlow.widen_env cx reason;
 
-        let body_env = Env.clone_env env in
-        Env.update_env cx reason body_env;
+        let body_env = EnvFlow.clone_env env in
+        EnvFlow.update_env cx reason body_env;
 
         let _, preds, _, xtypes =
           predicates_of_condition cx right in
-        let _ = Env.refine_with_preds cx reason preds xtypes in
+        let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
 
         (match left with
           | ForOf.LeftDeclaration (_, ({ VariableDeclaration.
@@ -1411,7 +1411,7 @@ and statement cx = Ast.Statement.(
           | ForOf.LeftExpression (loc, Ast.Expression.Identifier ident) ->
               let name = ident_name ident in
               let reason = mk_reason (spf "for..of `%s`" name) loc in
-              ignore Env.(set_var cx name element_tvar reason)
+              ignore EnvFlow.(set_var cx name element_tvar reason)
 
           | _ ->
               let msg = "unexpected LHS in for...of" in
@@ -1424,12 +1424,12 @@ and statement cx = Ast.Statement.(
         let newset = Changeset.merge oldset in
 
         if Abnormal.swap_saved (Abnormal.Continue None) save_continue <> None
-        then Env.havoc_vars newset;
-        Env.copy_env cx reason (env,body_env) newset;
+        then EnvFlow.havoc_vars newset;
+        EnvFlow.copy_env cx reason (env,body_env) newset;
 
-        Env.update_env cx reason env;
+        EnvFlow.update_env cx reason env;
         if Abnormal.swap_saved (Abnormal.Break None) save_break <> None
-        then Env.havoc_vars newset
+        then EnvFlow.havoc_vars newset
       )
 
   | (_, Let _) ->
@@ -1466,7 +1466,7 @@ and statement cx = Ast.Statement.(
       Hashtbl.replace (Context.type_table cx) type_table_loc fn_type;
       (match id with
       | Some(_, {Ast.Identifier.name; _ }) ->
-        Env.init_fun cx name fn_type reason
+        EnvFlow.init_fun cx name fn_type reason
       | None -> ())
 
   | (_, DeclareVariable _) ->
@@ -1485,10 +1485,10 @@ and statement cx = Ast.Statement.(
   | (class_loc, ClassDeclaration c) ->
       let (name_loc, name) = extract_class_name class_loc c in
       let reason = DescFormat.instance_reason name name_loc in
-      Env.declare_implicit_let Scope.Entry.ClassNameBinding cx name reason;
+      EnvFlow.declare_implicit_let Scope.Entry.ClassNameBinding cx name reason;
       let class_t = mk_class cx class_loc reason c in
       Hashtbl.replace (Context.type_table cx) class_loc class_t;
-      Env.init_implicit_let
+      EnvFlow.init_implicit_let
         Scope.Entry.ClassNameBinding
         cx
         name
@@ -1513,10 +1513,10 @@ and statement cx = Ast.Statement.(
     let _, { Ast.Statement.Block.body = elements } = body in
 
     let reason = mk_reason (spf "module `%s`" name) loc in
-    let t = Env.get_var_declared_type cx (internal_module_name name) reason in
+    let t = EnvFlow.get_var_declared_type cx (internal_module_name name) reason in
 
     let module_scope = Scope.fresh () in
-    Env.push_var_scope cx module_scope;
+    EnvFlow.push_var_scope cx module_scope;
     let outer_module_exports_kind = Context.module_exports_type cx in
     Context.set_module_exports_type cx (
       match kind with
@@ -1530,7 +1530,7 @@ and statement cx = Ast.Statement.(
 
     Context.set_declare_module_t cx None;
     Context.set_module_exports_type cx outer_module_exports_kind;
-    Env.pop_var_scope ();
+    EnvFlow.pop_var_scope ();
 
     (match kind with
       | DeclareModule.CommonJS kind_loc ->
@@ -1638,7 +1638,7 @@ and statement cx = Ast.Statement.(
     if Context.declare_module_t cx <> None then (
       let name = internal_name "declare_module.exports" in
       let reason = mk_reason "declare module.exports" loc in
-      Env.bind_declare_var cx name t reason
+      EnvFlow.bind_declare_var cx name t reason
     ) else (
       let reason = mk_reason "declare module.exports" loc in
       mark_exports_type cx reason (Context.CommonJSModule(Some loc));
@@ -1851,7 +1851,7 @@ and statement cx = Ast.Statement.(
           | Type.ImportType | Type.ImportTypeof -> ForType
           | Type.ImportValue -> ForValue
         in
-        Env.get_var_declared_type ~lookup_mode cx local_name reason
+        EnvFlow.get_var_declared_type ~lookup_mode cx local_name reason
       in
       Flow.unify cx t t_generic
     );
@@ -1878,7 +1878,7 @@ and export_statement cx loc
       mk_reason (spf "%s %s" export_reason_start export_reason) loc
     in
     let local_tvar = match local_tvar with
-    | None -> Env.var_ref ~lookup_mode cx local_name reason
+    | None -> EnvFlow.var_ref ~lookup_mode cx local_name reason
     | Some t -> t in
 
     (**
@@ -1953,7 +1953,7 @@ and export_statement cx loc
               Flow.flow cx (tvar, GetPropT(reason, (reason, local_name), t))
             )
           | None ->
-            Env.var_ref ~lookup_mode cx local_name reason
+            EnvFlow.var_ref ~lookup_mode cx local_name reason
         ) in
 
         (**
@@ -2223,7 +2223,7 @@ and object_ cx reason ?(allow_sealed=true) props =
 
 and variable cx kind
   ?if_uninitialized (_, vdecl) = Ast.Statement.(
-  let value_kind, init_var, declare_var = Env.(match kind with
+  let value_kind, init_var, declare_var = EnvFlow.(match kind with
     | VariableDeclaration.Const ->
       Scope.Entry.(Const ConstVarBinding), init_const, declare_const
     | VariableDeclaration.Let ->
@@ -2241,7 +2241,7 @@ and variable cx kind
         let reason = mk_reason (spf "%s `%s`" str_of_kind name) loc in
         (* make annotation, unify with declared type created in variable_decl *)
         let t = Anno.mk_type_annotation cx SMap.empty reason typeAnnotation in
-        Env.unify_declared_type cx name t;
+        EnvFlow.unify_declared_type cx name t;
         let has_anno = not (typeAnnotation = None) in
         (match init with
           | Some ((rhs_loc, _) as expr) ->
@@ -2278,7 +2278,7 @@ and variable cx kind
               then init_var cx name ~has_anno (f loc) reason
             | None ->
               if has_anno
-              then Env.pseudo_init_declared_type cx name reason
+              then EnvFlow.pseudo_init_declared_type cx name reason
               else declare_var cx name reason;
         )
     | loc, _ ->
@@ -2337,11 +2337,11 @@ and expression ?(is_cond=false) cx (loc, e) =
 and this_ cx r = Ast.Expression.(
   match Refinement.get cx (loc_of_reason r, This) r with
   | Some t -> t
-  | None -> Env.get_var cx (internal_name "this") r
+  | None -> EnvFlow.get_var cx (internal_name "this") r
 )
 
 and super_ cx reason =
-  Env.get_var cx (internal_name "super") reason
+  EnvFlow.get_var cx (internal_name "super") reason
 
 and expression_ ~is_cond cx loc e = Ast.Expression.(match e with
 
@@ -2526,7 +2526,7 @@ and expression_ ~is_cond cx loc e = Ast.Expression.(match e with
         _
       });
       arguments
-    } when not (Env.local_scope_entry_exists "require") -> (
+    } when not (EnvFlow.local_scope_entry_exists "require") -> (
       match arguments with
       | [ Expression (_, Ast.Expression.Literal {
           Ast.Literal.value = Ast.Literal.String module_name; _;
@@ -2741,12 +2741,12 @@ and expression_ ~is_cond cx loc e = Ast.Expression.(match e with
         }))::arguments ->
         (* invariant(false, ...) is treated like a throw *)
         ignore (List.map (expression_or_spread cx) arguments);
-        Env.reset_current_activation reason;
+        EnvFlow.reset_current_activation reason;
         Abnormal.save_and_throw Abnormal.Throw
       | (Expression cond)::arguments ->
         ignore (List.map (expression_or_spread cx) arguments);
         let _, preds, _, xtypes = predicates_of_condition cx cond in
-        let _ = Env.refine_with_preds cx reason preds xtypes in
+        let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
         ()
       | _ ->
         let msg = "unsupported arguments in call to invariant()" in
@@ -2764,22 +2764,22 @@ and expression_ ~is_cond cx loc e = Ast.Expression.(match e with
   | Conditional { Conditional.test; consequent; alternate } ->
       let reason = mk_reason "conditional" loc in
       let _, preds, not_preds, xtypes = predicates_of_condition cx test in
-      let env =  Env.peek_env () in
+      let env =  EnvFlow.peek_env () in
       let oldset = Changeset.clear () in
 
-      let then_env = Env.clone_env env in
-      Env.update_env cx reason then_env;
-      let _ = Env.refine_with_preds cx reason preds xtypes in
+      let then_env = EnvFlow.clone_env env in
+      EnvFlow.update_env cx reason then_env;
+      let _ = EnvFlow.refine_with_preds cx reason preds xtypes in
       let t1 = expression cx consequent in
 
-      let else_env = Env.clone_env env in
-      Env.update_env cx reason else_env;
-      let _ = Env.refine_with_preds cx reason not_preds xtypes in
+      let else_env = EnvFlow.clone_env env in
+      EnvFlow.update_env cx reason else_env;
+      let _ = EnvFlow.refine_with_preds cx reason not_preds xtypes in
       let t2 = expression cx alternate in
 
       let newset = Changeset.merge oldset in
-      Env.merge_env cx reason (env, then_env, else_env) newset;
-      Env.update_env cx reason env;
+      EnvFlow.merge_env cx reason (env, then_env, else_env) newset;
+      EnvFlow.update_env cx reason env;
       (* TODO call loc_of_predicate on some pred?
          t1 is wrong but hopefully close *)
 
@@ -2903,29 +2903,29 @@ and expression_ ~is_cond cx loc e = Ast.Expression.(match e with
             ) in
             add_entry name entry scope
           );
-          Env.push_var_scope cx scope;
+          EnvFlow.push_var_scope cx scope;
           let class_t = mk_class cx loc reason c in
-          Env.pop_var_scope ();
+          EnvFlow.pop_var_scope ();
           Flow.flow_t cx (class_t, tvar);
           class_t;
       | None -> mk_class cx loc reason c)
 
   | Yield { Yield.argument; delegate = false } ->
       let reason = mk_reason "yield" loc in
-      let yield = Env.get_var cx (internal_name "yield") reason in
+      let yield = EnvFlow.get_var cx (internal_name "yield") reason in
       let t = match argument with
       | Some expr -> expression cx expr
       | None -> VoidT.at loc in
       Flow.flow_t cx (t, yield);
-      let next = Env.get_var cx (internal_name "next") reason in
+      let next = EnvFlow.get_var cx (internal_name "next") reason in
       OptionalT next
 
   | Yield { Yield.argument; delegate = true } ->
       let reason = mk_reason "yield* delegate" loc in
-      let next = Env.get_var cx
+      let next = EnvFlow.get_var cx
         (internal_name "next")
         (prefix_reason "next of parent generator in " reason) in
-      let yield = Env.get_var cx
+      let yield = EnvFlow.get_var cx
         (internal_name "yield")
         (prefix_reason "yield of parent generator in " reason) in
       let t = match argument with
@@ -2991,9 +2991,9 @@ and new_call cx tok class_ argts =
   )
 
 and func_call cx reason func_t argts =
-  Env.havoc_heap_refinements ();
+  EnvFlow.havoc_heap_refinements ();
   Flow.mk_tvar_where cx reason (fun t ->
-    let frame = Env.peek_frame () in
+    let frame = EnvFlow.peek_frame () in
     let app = Flow.mk_functiontype argts t ~frame in
     Flow.flow cx (func_t, CallT(reason, app))
   )
@@ -3009,16 +3009,16 @@ and method_call cx loc prop_loc (expr, obj_t, name) argts =
          generalizing this properly is a todo, and will deliver goodness.
          meanwhile, here we must hijack the property selection normally
          performed by the flow algorithm itself. *)
-      Env.havoc_heap_refinements ();
+      EnvFlow.havoc_heap_refinements ();
       Flow.mk_tvar_where cx reason (fun t ->
-        let frame = Env.peek_frame () in
+        let frame = EnvFlow.peek_frame () in
         let app = Flow.mk_methodtype obj_t argts t ~frame in
         Flow.flow cx (f, CallT (reason, app));
       )
   | None ->
-      Env.havoc_heap_refinements ();
+      EnvFlow.havoc_heap_refinements ();
       Flow.mk_tvar_where cx reason (fun t ->
-        let frame = Env.peek_frame () in
+        let frame = EnvFlow.peek_frame () in
         let expr_loc, _ = expr in
         let reason_expr = mk_reason (spf "property `%s`" name) expr_loc in
         let reason_prop = mk_reason (spf "property `%s`" name) prop_loc in
@@ -3035,7 +3035,7 @@ and identifier cx name loc =
   then AnyT.at loc
   else (
     let reason = mk_reason (spf "identifier `%s`" name) loc in
-    Env.var_ref ~lookup_mode:ForValue cx name reason
+    EnvFlow.var_ref ~lookup_mode:ForValue cx name reason
   )
 
 (* traverse a literal expression, return result type *)
@@ -3119,7 +3119,7 @@ and update cx loc expr = Ast.Expression.Update.(
     Flow.flow_t cx (lhs_t, result_t);
      (* enforce state-based guards for binding update, e.g., const *)
      let id_reason = mk_reason name id_loc in
-     ignore Env.(set_var cx name result_t id_reason)
+     ignore EnvFlow.(set_var cx name result_t id_reason)
   | expr ->
     let lhs_t = expression cx expr in
     Flow.flow_t cx (lhs_t, result_t)
@@ -3201,7 +3201,7 @@ and logical cx loc = Ast.Expression.Logical.(function
   | { operator = Or; left; right } ->
       let t1, _, not_map, xtypes = predicates_of_condition cx left in
       let reason = mk_reason "||" loc in
-      let t2 = Env.in_refined_env cx reason not_map xtypes
+      let t2 = EnvFlow.in_refined_env cx reason not_map xtypes
         (fun () -> expression cx right)
       in
       Flow.mk_tvar_where cx reason (fun t ->
@@ -3211,7 +3211,7 @@ and logical cx loc = Ast.Expression.Logical.(function
   | { operator = And; left; right } ->
       let t1, map, _, xtypes = predicates_of_condition cx left in
       let reason = mk_reason "&&" loc in
-      let t2 = Env.in_refined_env cx reason map xtypes
+      let t2 = EnvFlow.in_refined_env cx reason map xtypes
         (fun () -> expression cx right)
       in
       Flow.mk_tvar_where cx reason (fun t ->
@@ -3296,7 +3296,7 @@ and assignment cx loc = Ast.Expression.(function
                  in pre-havoc environment. it's the assignment itself
                  which clears refis *)
               (* TODO: havoc refinements for this prop name only *)
-              Env.havoc_heap_refinements_with_propname name;
+              EnvFlow.havoc_heap_refinements_with_propname name;
 
               (* add type refinement if LHS is a pattern we handle *)
               match Refinement.key expr with
@@ -3311,7 +3311,7 @@ and assignment cx loc = Ast.Expression.(function
                    object and refinement types - `o` and `t` here - are
                    fully resolved.
                  *)
-                ignore Env.(set_expr key reason t t)
+                ignore EnvFlow.(set_expr key reason t t)
               | None ->
                 ()
             )
@@ -3331,7 +3331,7 @@ and assignment cx loc = Ast.Expression.(function
             (* types involved in the assignment itself are computed
                in pre-havoc environment. it's the assignment itself
                which clears refis *)
-            Env.havoc_heap_refinements ();
+            EnvFlow.havoc_heap_refinements ();
 
         (* other r structures are handled as destructuring assignments *)
         | _ ->
@@ -3352,7 +3352,7 @@ and assignment cx loc = Ast.Expression.(function
       (match lhs with
       | _, Ast.Pattern.Identifier (id_loc, { Ast.Identifier.name; _ }) ->
         let id_reason = mk_reason name id_loc in
-        ignore Env.(set_var cx name result_t id_reason)
+        ignore EnvFlow.(set_var cx name result_t id_reason)
       | _ -> ()
       );
       lhs_t
@@ -3381,7 +3381,7 @@ and assignment cx loc = Ast.Expression.(function
       (match lhs with
       | _, Ast.Pattern.Identifier (id_loc, { Ast.Identifier.name; _ }) ->
         let id_reason = mk_reason name id_loc in
-        ignore Env.(set_var cx name result_t id_reason)
+        ignore EnvFlow.(set_var cx name result_t id_reason)
       | _ -> ()
       );
       lhs_t
@@ -3471,7 +3471,7 @@ and jsx_title cx openingElement _children = Ast.JSX.(
     then AnyT.at eloc
     else
       let reason = mk_reason (spf "React element `%s`" name) eloc in
-      let c = Env.get_var cx name reason in
+      let c = EnvFlow.get_var cx name reason in
       let o = mk_props reason c in
       (* TODO: children *)
       let react = require cx ~internal:true "react" eloc in
@@ -4070,7 +4070,7 @@ and predicates_of_condition cx e = Ast.(Expression.(
 
   (* inspect an undefined equality test *)
   let undef_test loc ~sense ~strict e void_t =
-    if Env.is_global_var cx "undefined"
+    if EnvFlow.is_global_var cx "undefined"
     then void_test loc ~sense ~strict e void_t
     else empty_result (BoolT.at loc)
   in
@@ -4413,7 +4413,7 @@ and predicates_of_condition cx e = Ast.(Expression.(
       let reason = mk_reason "&&" loc in
       let t1, map1, not_map1, xts1 =
         predicates_of_condition cx left in
-      let t2, map2, not_map2, xts2 = Env.in_refined_env cx reason map1 xts1
+      let t2, map2, not_map2, xts2 = EnvFlow.in_refined_env cx reason map1 xts1
         (fun () -> predicates_of_condition cx right)
       in
       (
@@ -4430,7 +4430,7 @@ and predicates_of_condition cx e = Ast.(Expression.(
       let reason = mk_reason "||" loc in
       let t1, map1, not_map1, xts1 =
         predicates_of_condition cx left in
-      let t2, map2, not_map2, xts2 = Env.in_refined_env cx reason not_map1 xts1
+      let t2, map2, not_map2, xts2 = EnvFlow.in_refined_env cx reason not_map1 xts1
         (fun () -> predicates_of_condition cx right)
       in
       (
@@ -4649,8 +4649,8 @@ and function_decl id cx reason func this super =
 (* Switch back to the declared type for an internal name. *)
 and define_internal cx reason x =
   let ix = internal_name x in
-  let opt = Env.get_var_declared_type cx ix reason in
-  ignore Env.(set_var cx ix (Flow.filter_optional cx reason opt) reason)
+  let opt = EnvFlow.get_var_declared_type cx ix reason in
+  ignore EnvFlow.(set_var cx ix (Flow.filter_optional cx reason opt) reason)
 
 (* Process a function definition, returning a (polymorphic) function type. *)
 and mk_function id cx reason func =

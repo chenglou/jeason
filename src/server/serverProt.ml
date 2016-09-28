@@ -38,7 +38,7 @@ type command =
     bool * (* graphml *)
     bool (* respect_pragma *)
 | COVERAGE of file_input
-| DUMP_TYPES of file_input * bool (* filename, include raw *) * (Path.t option) (* strip_root *)
+| DUMP_TYPES of file_input * bool (* filename, include raw *) * (PathFlow.t option) (* strip_root *)
 | ERROR_OUT_OF_DATE
 | FIND_MODULE of string * string
 | GEN_FLOW_FILES of file_input list
@@ -54,7 +54,7 @@ type command =
 | KILL
 | PING
 | PORT of string list
-| STATUS of Path.t
+| STATUS of PathFlow.t
 | FORCE_RECHECK of string list
 | SUGGEST of string list
 
@@ -81,7 +81,7 @@ type infer_type_response = (
 ) Utils_js.ok_or_err
 
 type gen_flow_file_error =
-  | GenFlowFile_TypecheckError of Errors.ErrorSet.t
+  | GenFlowFile_TypecheckError of ErrorsFlow.ErrorSet.t
   | GenFlowFile_UnexpectedError of string
 type gen_flow_file_result =
   | GenFlowFile_FlowFile of string
@@ -108,13 +108,13 @@ let cmd_from_channel (ic:in_channel): command_with_context =
   else Marshal.from_channel ic
 
 type directory_mismatch = {
-  server: Path.t;
-  client: Path.t;
+  server: PathFlow.t;
+  client: PathFlow.t;
 }
 
 type response =
 | DIRECTORY_MISMATCH of directory_mismatch
-| ERRORS of Errors.error list
+| ERRORS of ErrorsFlow.error list
 | NO_ERRORS
 | PONG
 | SERVER_DYING
@@ -122,8 +122,8 @@ type response =
 
 let response_to_string = function
   | DIRECTORY_MISMATCH _ -> "Directory Mismatch"
-  | ERRORS _ -> "Some Errors"
-  | NO_ERRORS -> "No Errors"
+  | ERRORS _ -> "Some ErrorsFlow"
+  | NO_ERRORS -> "No ErrorsFlow"
   | PONG -> "Pong"
   | SERVER_DYING -> "Server Dying"
   | SERVER_OUT_OF_DATE -> "Server Out of Date"

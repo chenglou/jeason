@@ -23,7 +23,7 @@ open Utils_js
 open String_utils
 module Ast = Spider_monkey_ast
 
-let mk_id () = Ident.make ""
+let mk_id () = IdentFlow.make ""
 
 (* Reasons are included in types mainly for error reporting, but sometimes we
    also use reasons in types to recover information on the source code that
@@ -146,13 +146,13 @@ let strip_root_from_loc root loc = Loc.(
   | None -> None
   | Some Builtins -> Some Builtins
   | Some LibFile file ->
-    let root_str = spf "%s%s" (Path.to_string root) Filename.dir_sep in
+    let root_str = spf "%s%s" (PathFlow.to_string root) Filename.dir_sep in
     if string_starts_with file root_str
     then Some (LibFile (spf "[LIB] %s" (Files.relative_path root_str file)))
     else Some (LibFile (spf "[LIB] %s" (Filename.basename file)))
 
   | Some (SourceFile _ | JsonFile _ | ResourceFile _ as filename) ->
-    let root_str = spf "%s%s" (Path.to_string root) Filename.dir_sep in
+    let root_str = spf "%s%s" (PathFlow.to_string root) Filename.dir_sep in
     Some (Loc.filename_map (Files.relative_path root_str) filename)
   in
   { loc with source }

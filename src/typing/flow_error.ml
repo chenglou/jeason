@@ -42,7 +42,7 @@ end
 module Impl : sig
 
   (* speculative checking *)
-  exception SpeculativeError of Errors.error
+  exception SpeculativeError of ErrorsFlow.error
 
   (* Maintain a stack of speculative branches. See Speculation for the contents
      of the "branch" data structure.
@@ -63,53 +63,53 @@ module Impl : sig
 
   (* error info is a location followed by a list of strings.
      mk_info takes location and first string from a reason. *)
-  val mk_info: reason -> string list -> Errors.info
+  val mk_info: reason -> string list -> ErrorsFlow.info
 
   (* convert reason into error info *)
-  val info_of_reason: reason -> Errors.info
+  val info_of_reason: reason -> ErrorsFlow.info
 
   (* build warning from info and add to context *)
   val add_warning:
-    Context.t -> ?extra:Errors.info_tree list -> Errors.info -> unit
+    Context.t -> ?extra:ErrorsFlow.info_tree list -> ErrorsFlow.info -> unit
 
   (* build error from info and add to context *)
   val add_error:
-    Context.t -> ?extra:Errors.info_tree list -> Errors.info -> unit
+    Context.t -> ?extra:ErrorsFlow.info_tree list -> ErrorsFlow.info -> unit
 
   (* build error from info list and add to context *)
   val add_extended_error:
-    Context.t -> ?extra:Errors.info_tree list -> Errors.info list -> unit
+    Context.t -> ?extra:ErrorsFlow.info_tree list -> ErrorsFlow.info list -> unit
 
   (* build internal error from info and add to context *)
   val add_internal_error:
-    Context.t -> ?extra:Errors.info_tree list -> Errors.info -> unit
+    Context.t -> ?extra:ErrorsFlow.info_tree list -> ErrorsFlow.info -> unit
 
   (* add typecheck (flow) error from message and LB/UB pair.
      note: reasons extracted from types may appear in either order *)
   val flow_err:
-    Context.t -> Trace.t -> string -> ?extra:Errors.info_tree list ->
+    Context.t -> TraceFlow.t -> string -> ?extra:ErrorsFlow.info_tree list ->
     Type.t -> Type.use_t ->
     unit
 
   (* for when a t has been extracted from a use_t *)
   val flow_err_use_t:
-    Context.t -> Trace.t -> string -> ?extra:Errors.info_tree list ->
+    Context.t -> TraceFlow.t -> string -> ?extra:ErrorsFlow.info_tree list ->
     Type.t -> Type.t ->
     unit
 
   (* add typecheck (flow) error from message and reason pair.
      reasons are not reordered *)
   val flow_err_reasons:
-    Context.t -> Trace.t -> string -> ?extra:Errors.info_tree list ->
+    Context.t -> TraceFlow.t -> string -> ?extra:ErrorsFlow.info_tree list ->
     reason * reason ->
     unit
 
   (* TODO remove once error messages are indexed *)
   val flow_err_prop_not_found:
-    Context.t -> Trace.t -> reason * reason -> unit
+    Context.t -> TraceFlow.t -> reason * reason -> unit
 
   val flow_err_strict_lookup_failed:
-    Context.t -> Trace.t -> string -> reason -> reason * reason -> unit
+    Context.t -> TraceFlow.t -> string -> reason -> reason * reason -> unit
 
   val warn_or_ignore_decorators:
     Context.t -> Loc.t -> unit
@@ -122,7 +122,7 @@ module Impl : sig
 
 end = struct
 
-  exception SpeculativeError of Errors.error
+  exception SpeculativeError of ErrorsFlow.error
 
   let speculations = ref []
   let set_speculative branch =
@@ -151,10 +151,10 @@ end = struct
       if Context.is_verbose cx
       then prerr_endlinef "\nadd_output cx.file %S loc %s"
         (string_of_filename (Context.file cx))
-        (string_of_loc (Errors.loc_of_error error));
+        (string_of_loc (ErrorsFlow.loc_of_error error));
 
       (* catch no-loc errors early, before they get into error map *)
-      Errors.(
+      ErrorsFlow.(
         if Loc.source (loc_of_error error) = None
         then assert_false (spf "add_output: no source for error: %s"
           (Hh_json.json_to_multiline (json_of_errors [error])))
@@ -164,16 +164,16 @@ end = struct
     )
 
   let add_warning cx ?extra info =
-    add_output cx Errors.(mk_error ~kind:InferWarning ?extra [info])
+    add_output cx ErrorsFlow.(mk_error ~kind:InferWarning ?extra [info])
 
   let add_error cx ?extra info =
-    add_output cx (Errors.mk_error ?extra [info])
+    add_output cx (ErrorsFlow.mk_error ?extra [info])
 
   let add_extended_error cx ?extra infos =
-    add_output cx (Errors.mk_error ?extra infos)
+    add_output cx (ErrorsFlow.mk_error ?extra infos)
 
   let add_internal_error cx ?extra info =
-    add_output cx Errors.(mk_error ~kind:InternalError ?extra [info])
+    add_output cx ErrorsFlow.(mk_error ~kind:InternalError ?extra [info])
 
   (** build typecheck error from msg, reasons, trace and extra info.
       Note: Ops stack is also queried, so this isn't a stateless function.
@@ -207,7 +207,7 @@ end = struct
           if not strip_root then r
           else Reason.strip_root root r
         in
-        Trace.reasons_of_trace ~prep_path ~level:max_trace_depth trace
+        TraceFlow.reasons_of_trace ~prep_path ~level:max_trace_depth trace
         |> List.map info_of_reason
     in
     (* NOTE: We include the operation's reason in the error message, unless it
@@ -223,7 +223,7 @@ end = struct
     (* main info is core info with optional lib line prepended, and optional
        extra info appended. ops/trace info is held separately in error *)
     let msg_infos = lib_infos @ origin_infos @ core_infos in
-    Errors.mk_error ?op_info ~trace_infos ?extra msg_infos
+    ErrorsFlow.mk_error ?op_info ~trace_infos ?extra msg_infos
 
   let flow_err_reasons cx trace msg ?extra (r1, r2) =
     add_output cx (typecheck_error cx trace msg ?extra (r1, r2))

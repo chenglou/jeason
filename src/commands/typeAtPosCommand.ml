@@ -74,11 +74,11 @@ let handle_response (loc, t, raw_t, reasons) ~json ~pretty strip =
               JSON_Object (
                   ("desc", JSON_String (Reason.desc_of_reason r)) ::
                   ("loc", Reason.json_of_loc r_loc) ::
-                  (Errors.deprecated_json_props_of_loc r_loc)
+                  (ErrorsFlow.deprecated_json_props_of_loc r_loc)
                 )
             ) reasons)) ::
         ("loc", Reason.json_of_loc loc) ::
-        (Errors.deprecated_json_props_of_loc loc)
+        (ErrorsFlow.deprecated_json_props_of_loc loc)
     ) in
     let json_assoc = match raw_t with
       | None -> json_assoc
@@ -113,7 +113,7 @@ let handle_error (loc, err) ~json ~pretty strip =
     let json = JSON_Object (
       ("error", JSON_String err) ::
       ("loc", Reason.json_of_loc loc) ::
-      (Errors.deprecated_json_props_of_loc loc)
+      (ErrorsFlow.deprecated_json_props_of_loc loc)
     ) in
     prerr_endline (json_to_string ~pretty json)
   ) else (

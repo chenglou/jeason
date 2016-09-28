@@ -11,4 +11,4 @@
 type index
 
 val read_index: unit -> index option
-val dump_files: Path.t -> index -> unit
+val dump_files: PathFlow.t -> index -> unit

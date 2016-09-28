@@ -20,7 +20,7 @@ open Utils_js
 
 module Ast = Spider_monkey_ast
 module Flow = Flow_js
-module ErrorSet = Errors.ErrorSet
+module ErrorSet = ErrorsFlow.ErrorSet
 module FlowError = Flow_error
 
 module NameSet = Set.Make(Modulename)
@@ -53,7 +53,7 @@ let choose_provider_and_warn_about_duplicates =
 
   let warn_duplicate_providers m current modules errmap =
     List.fold_left (fun acc f ->
-      let w = Errors.(mk_error ~kind:DuplicateProviderError [
+      let w = ErrorsFlow.(mk_error ~kind:DuplicateProviderError [
           Loc.({ none with source = Some f }), [
             m; "Duplicate module provider"];
           Loc.({ none with source = Some current }), [
@@ -102,7 +102,7 @@ let module_name_candidates ~options name =
   ) else (
     let mappers = Options.module_name_mappers options in
     let root = Options.root options
-      |> Path.to_string
+      |> PathFlow.to_string
       |> Sys_utils.normalize_filename_dir_sep in
     let map_name mapped_names (regexp, template) =
       let new_name = name
@@ -266,9 +266,9 @@ module type MODULE_SYSTEM = sig
     string ->   (* module name *)
     FilenameSet.t ->   (* set of candidate provider files *)
     (* map from files to error sets (accumulator) *)
-    Errors.ErrorSet.t FilenameMap.t ->
+    ErrorsFlow.ErrorSet.t FilenameMap.t ->
     (* file, error map (accumulator) *)
-    (filename * Errors.ErrorSet.t FilenameMap.t)
+    (filename * ErrorsFlow.ErrorSet.t FilenameMap.t)
 
 end
 
@@ -324,7 +324,7 @@ and file_exists path =
   )
 
 let resolve_symlinks path =
-  Path.to_string (Path.make path)
+  PathFlow.to_string (PathFlow.make path)
 
 (**
  * Given a list of lazy "option" expressions, evaluate each in the list
@@ -378,7 +378,7 @@ module Node = struct
         let project_root = Options.root options in
         let msg =
           let is_included = Files.is_included options package in
-          let project_root_str = Path.to_string project_root in
+          let project_root_str = PathFlow.to_string project_root in
           let is_contained_in_root =
             Files.is_prefix project_root_str package
           in

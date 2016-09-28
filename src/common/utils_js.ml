@@ -38,10 +38,10 @@ end
 
 module FilenameMap = MyMap.Make (Loc.FilenameKey)
 
-module PathMap : MyMap.S with type key = Path.t = MyMap.Make (struct
-  type t = Path.t
+module PathMap : MyMap.S with type key = PathFlow.t = MyMap.Make (struct
+  type t = PathFlow.t
   let compare p1 p2 =
-    String.compare (Path.to_string p1) (Path.to_string p2)
+    String.compare (PathFlow.to_string p1) (PathFlow.to_string p2)
 end)
 
 let set_of_list = List.fold_left (fun acc x -> SSet.add x acc) SSet.empty

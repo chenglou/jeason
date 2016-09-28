@@ -39,7 +39,7 @@ val wanted:
 
 (* given a root, make a next_files function for MultiWorker *)
 val make_next_files:
-  subdir: Path.t option ->
+  subdir: PathFlow.t option ->
   options: Options.t ->
   libs: SSet.t ->
   unit -> string list
@@ -55,11 +55,11 @@ val construct_path: string -> string list -> string
 val relative_path: string -> string -> string
 
 (* TODO: this doesn't match the signatures of the related functions above *)
-val make_path_absolute: Path.t -> string -> Path.t
+val make_path_absolute: PathFlow.t -> string -> PathFlow.t
 
 val is_prefix: string -> string -> bool
 
-val get_flowtyped_path: Path.t -> Path.t
+val get_flowtyped_path: PathFlow.t -> PathFlow.t
 
 val filename_from_string: options: Options.t -> string -> Loc.filename
 

@@ -173,5 +173,5 @@ let defer_if_relevant cx branch action =
 (* The state maintained by speculative_matches when trying each case of a
    union/intersection in turn. *)
 type match_state =
-| NoMatch of Errors.error list
+| NoMatch of ErrorsFlow.error list
 | ConditionalMatch of Case.t

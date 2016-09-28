@@ -67,7 +67,7 @@ let spec = {
 
 let write_file strip_root root content perm src_file_path dest_file_path =
   let fd = Unix.(openfile dest_file_path [O_CREAT; O_TRUNC; O_WRONLY;] perm) in
-  let root_str = Path.to_string root in
+  let root_str = PathFlow.to_string root in
   let printed_src_file_path =
     if strip_root
     then Files.relative_path root_str src_file_path
@@ -117,7 +117,7 @@ let main option_values root error_flags strip_root ignore_flag include_flag src 
           ~strip_root
           ~ignore_flag
           ~include_flag
-          ~subdir:(Some (Path.make src))
+          ~subdir:(Some (PathFlow.make src))
       in
       let files = Files.get_all next_files in
       let num_files = SSet.cardinal files in
@@ -131,8 +131,8 @@ let main option_values root error_flags strip_root ignore_flag include_flag src 
   cmd_to_channel out_chan (GEN_FLOW_FILES filenames);
   match ((Timeout.input_value in_chan: gen_flow_file_response), out_dir) with
   | (Err (GenFlowFile_TypecheckError errors), _) ->
-    let errors = Errors.to_list errors in
-    Errors.print_error_summary
+    let errors = ErrorsFlow.to_list errors in
+    ErrorsFlow.print_error_summary
       ~out_channel:stderr
       ~flags:error_flags
       ~strip_root

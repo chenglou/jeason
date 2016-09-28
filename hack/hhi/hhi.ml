@@ -27,8 +27,8 @@ let touch () =
  * handling in general, really). Running the server as root is likely to be a
  * security risk. Be careful. *)
 let extract data =
-  let tmpdir = Path.make (Tmp.temp_dir GlobalConfig.tmp_dir "hhi") in
-  let oc = Unix.open_process_out ("tar xzC " ^ (Path.to_string tmpdir)) in
+  let tmpdir = PathFlow.make (Tmp.temp_dir GlobalConfig.tmp_dir "hhi") in
+  let oc = Unix.open_process_out ("tar xzC " ^ (PathFlow.to_string tmpdir)) in
   output_string oc data;
   flush oc;
   ignore (Unix.close_process_out oc);
@@ -43,14 +43,14 @@ let extract_embedded () =
  * bytecode builds. *)
 let extract_external () =
   let path =
-    Path.concat (Path.dirname Path.executable_name) "hhi.tar.gz" in
-  if Path.file_exists path then Some (extract (Path.cat path)) else None
+    PathFlow.concat (PathFlow.dirname PathFlow.executable_name) "hhi.tar.gz" in
+  if PathFlow.file_exists path then Some (extract (PathFlow.cat path)) else None
 
 let extract_win32_res () =
   match Hhi_win32res.read_index () with
   | None -> None
   | Some idx ->
-    let tmpdir = Path.make (Tmp.temp_dir GlobalConfig.tmp_dir "hhi") in
+    let tmpdir = PathFlow.make (Tmp.temp_dir GlobalConfig.tmp_dir "hhi") in
     Hhi_win32res.dump_files tmpdir idx;
     touch_root tmpdir;
     Some tmpdir

@@ -52,7 +52,7 @@ let main option_values root json pretty strip_root moduleref filename () =
     | Some Loc.SourceFile file
     | Some Loc.JsonFile file
     | Some Loc.ResourceFile file ->
-        if strip_root then Files.relative_path (Path.to_string root) file
+        if strip_root then Files.relative_path (PathFlow.to_string root) file
         else file
     | Some Loc.Builtins -> "(global)"
     | None -> "(unknown)" in

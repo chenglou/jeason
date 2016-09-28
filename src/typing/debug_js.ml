@@ -43,7 +43,7 @@ type json_cx = {
   size: int ref;
   depth: int;
   cx: Context.t;
-  strip_root: Path.t option;
+  strip_root: PathFlow.t option;
 }
 
 let check_depth continuation json_cx =
@@ -1363,7 +1363,7 @@ let string_of_file cx =
   match Context.is_verbose cx with
   | false -> filename
   | true ->
-    let root_str = Path.to_string (Context.root cx) ^ Filename.dir_sep in
+    let root_str = PathFlow.to_string (Context.root cx) ^ Filename.dir_sep in
     if String_utils.string_starts_with filename root_str
       then Files.relative_path root_str filename
       else filename

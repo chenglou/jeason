@@ -97,7 +97,7 @@ module OptionParser(Config : CONFIG) = struct
       |> dummy false (* profile *)
       |> dummy false (* quiet *)
       |> flag "--log-file" string
-          ~doc:"Path to log file (default: /tmp/flow/<escaped root path>.log)"
+          ~doc:"PathFlow to log file (default: /tmp/flow/<escaped root path>.log)"
       |> flag "--wait" no_arg
           ~doc:"Wait for the server to finish initializing"
       |> common_args
@@ -118,7 +118,7 @@ module OptionParser(Config : CONFIG) = struct
   }
 
   let default_lib_dir tmp_dir =
-    let root = Path.make (Tmp.temp_dir tmp_dir "flowlib") in
+    let root = PathFlow.make (Tmp.temp_dir tmp_dir "flowlib") in
     if Flowlib.extract_flowlib root
     then root
     else begin
@@ -142,7 +142,7 @@ module OptionParser(Config : CONFIG) = struct
     in
     let config_libs =
       if !has_explicit_flowtyped_lib = false
-         && (Sys.file_exists (Path.to_string flowtyped_path))
+         && (Sys.file_exists (PathFlow.to_string flowtyped_path))
       then flowtyped_path::config_libs
       else config_libs
     in
@@ -151,7 +151,7 @@ module OptionParser(Config : CONFIG) = struct
     | Some libs ->
       let libs = libs
       |> Str.split (Str.regexp ",")
-      |> List.map Path.make in
+      |> List.map PathFlow.make in
       config_libs @ libs
 
   let assert_version version_constraint =
@@ -232,9 +232,9 @@ module OptionParser(Config : CONFIG) = struct
     let opt_shm_min_avail = Option.value
       shm_min_avail
       ~default:FlowConfig.(flowconfig.options.Opts.shm_min_avail) in
-    let opt_temp_dir = Path.to_string (Path.make opt_temp_dir) in
+    let opt_temp_dir = PathFlow.to_string (PathFlow.make opt_temp_dir) in
     let opt_shm_dirs =
-      List.map Path.(fun dir -> dir |> make |> to_string) opt_shm_dirs in
+      List.map PathFlow.(fun dir -> dir |> make |> to_string) opt_shm_dirs in
     let opt_shm_dep_table_pow = Option.value
       shm_dep_table_pow
       ~default:FlowConfig.(flowconfig.options.Opts.shm_dep_table_pow) in
@@ -248,9 +248,9 @@ module OptionParser(Config : CONFIG) = struct
       if no_flowlib then None else Some (default_lib_dir opt_temp_dir) in
     let opt_log_file = match log_file with
       | Some s ->
-          let dirname = Path.make (Filename.dirname s) in
+          let dirname = PathFlow.make (Filename.dirname s) in
           let basename = Filename.basename s in
-          Path.concat dirname basename
+          PathFlow.concat dirname basename
       | None ->
           Server_files_js.log_file
             ~tmp_dir:opt_temp_dir

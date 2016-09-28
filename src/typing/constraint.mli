@@ -26,10 +26,10 @@ and constraints =
 | Unresolved of bounds
 
 and bounds = {
-  mutable lower: Trace.t Type.TypeMap.t;
-  mutable upper: Trace.t Type.UseTypeMap.t;
-  mutable lowertvars: Trace.t IMap.t;
-  mutable uppertvars: Trace.t IMap.t;
+  mutable lower: TraceFlow.t Type.TypeMap.t;
+  mutable upper: TraceFlow.t Type.UseTypeMap.t;
+  mutable lowertvars: TraceFlow.t IMap.t;
+  mutable uppertvars: TraceFlow.t IMap.t;
 }
 
 val new_unresolved_root: unit -> node

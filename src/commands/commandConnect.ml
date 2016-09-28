@@ -11,7 +11,7 @@
 module CCS = CommandConnectSimple
 
 type env = {
-  root : Path.t;
+  root : PathFlow.t;
   autostart : bool;
   retries : int;
   retry_if_init : bool;
@@ -97,9 +97,9 @@ let start_flow_server env =
   } = env in
   Utils_js.prerr_endlinef
     "Launching Flow server for %s"
-    (Path.to_string root);
+    (PathFlow.to_string root);
   let exe = Sys.argv.(0) in
-  let args = [ Path.to_string root ]
+  let args = [ PathFlow.to_string root ]
   |> arg_map "--sharedmemory-hash-table-pow" ~f:string_of_int shm_hash_table_pow
   |> arg_map "--sharedmemory-dep-table-pow" ~f:string_of_int shm_dep_table_pow
   |> arg_map "--sharedmemory-minimum-available" ~f:string_of_int shm_min_avail
@@ -207,7 +207,7 @@ let rec connect env retries start_time tail_env =
       end else begin
         let msg = Utils_js.spf
           "\nError: There is no Flow server running in '%s'."
-          (Path.to_string env.root) in
+          (PathFlow.to_string env.root) in
         FlowExitStatus.(exit ~msg No_server_running)
       end
   | Result.Error CCS.Server_busy ->

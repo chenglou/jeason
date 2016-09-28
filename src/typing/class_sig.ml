@@ -302,8 +302,8 @@ let mk_interface_super cx structural reason tparams_map = Type.(function
       assert false (* type args with no head expr *)
   | (Some id, targs) ->
       let desc, lookup_mode =
-        if structural then "extends", Env.LookupMode.ForType
-        else "mixins", Env.LookupMode.ForValue in
+        if structural then "extends", EnvFlow.LookupMode.ForType
+        else "mixins", EnvFlow.LookupMode.ForValue in
       let i = Anno.convert_qualification ~lookup_mode cx desc id in
       if structural then
         let params = Anno.extract_type_param_instantiations targs in
@@ -328,7 +328,7 @@ let mk_mixins cx reason tparams_map = Type.(function
       assert false (* type args with no head expr *)
   | (Some id, targs) ->
       let i =
-        let lookup_mode = Env.LookupMode.ForValue in
+        let lookup_mode = EnvFlow.LookupMode.ForValue in
         Anno.convert_qualification ~lookup_mode cx "mixins" id
       in
       let props_bag = Flow.mk_tvar_derivable_where cx reason (fun tvar ->

@@ -80,13 +80,13 @@ let infer_job ~options (inferred, errsets, errsuppressions) files =
     (* A catch all suppression is probably a bad idea... *)
     | exc ->
       let msg = "infer_job exception: "^(fmt_exc exc) in
-      let errorset = Errors.ErrorSet.singleton
-        (Errors.internal_error file msg) in
+      let errorset = ErrorsFlow.ErrorSet.singleton
+        (ErrorsFlow.internal_error file msg) in
       prerr_endlinef "(%d) infer_job THROWS: %s"
         (Unix.getpid()) (fmt_file_exc (string_of_filename file) exc);
       file::inferred,
         errorset::errsets,
-        Errors.ErrorSuppressions.empty::errsuppressions
+        ErrorsFlow.ErrorSuppressions.empty::errsuppressions
   ) (inferred, errsets, errsuppressions) files
 
 (* local type inference pass.

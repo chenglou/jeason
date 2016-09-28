@@ -12,4 +12,4 @@ type msg =
   | Ready
   | Updates of SSet.t
 
-val entry_point: ((string * Path.t list), unit, msg) Daemon.entry
+val entry_point: ((string * PathFlow.t list), unit, msg) Daemon.entry

@@ -18,7 +18,7 @@ type getdef_type =
 let getdef_id (state, loc1) _cx name loc2 =
   if Reason.in_range loc1 loc2
   then (
-    let env = Env.all_entries () in
+    let env = EnvFlow.all_entries () in
     match SMap.get name env with
     | Some entry ->
         state := Some (Gdloc (Scope.Entry.assign_loc entry))

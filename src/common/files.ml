@@ -53,8 +53,8 @@ let realpath path = match Sys_utils.realpath path with
 
 let make_path_absolute root path =
   if Filename.is_relative path
-  then Path.concat root path
-  else Path.make path
+  then PathFlow.concat root path
+  else PathFlow.make path
 
 type file_kind =
 | Reg of string
@@ -169,7 +169,7 @@ let make_next_files_following_symlinks
   ~realpath_filter
   ~error_filter
   paths =
-  let paths = List.map Path.to_string paths in
+  let paths = List.map PathFlow.to_string paths in
   let cb = ref (make_next_files_and_symlinks
     ~path_filter ~realpath_filter ~error_filter paths
   ) in
@@ -212,7 +212,7 @@ let init options =
   let libs, filter = match Options.default_lib_dir options with
     | None -> libs, is_valid_path ~options
     | Some root ->
-      let is_in_flowlib = is_prefix (Path.to_string root) in
+      let is_in_flowlib = is_prefix (PathFlow.to_string root) in
       let filter path = is_in_flowlib path || is_valid_path ~options path in
       root::libs, filter
   in
@@ -221,7 +221,7 @@ let init options =
     then []
     else
       let get_next lib =
-        let lib_str = Path.to_string lib in
+        let lib_str = PathFlow.to_string lib in
         let filter' path = path = lib_str || filter path in
         make_next_files_following_symlinks
           ~path_filter:filter'
@@ -269,7 +269,7 @@ let make_next_files ~subdir ~options ~libs =
   let root = Options.root options in
   let filter = wanted ~options libs in
   let others = Path_matcher.stems (Options.includes options) in
-  let root_str= Path.to_string root in
+  let root_str= PathFlow.to_string root in
   let realpath_filter path = is_valid_path ~options path && filter path in
   let path_filter =
     (**
@@ -283,7 +283,7 @@ let make_next_files ~subdir ~options ~libs =
         && realpath_filter path
       )
     | Some subdir ->
-      let subdir_str = Path.to_string subdir in
+      let subdir_str = PathFlow.to_string subdir in
       (fun path ->
         (String_utils.string_starts_with path subdir_str)
         && realpath_filter path

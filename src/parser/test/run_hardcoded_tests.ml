@@ -52,7 +52,7 @@ end = struct
     let opt_test_file = match !test_file with
     | Some x -> x
     | _ ->
-      prerr_endline "ERROR: Path to test file is required\n";
+      prerr_endline "ERROR: PathFlow to test file is required\n";
       Arg.usage spec usage;
       exit 1
     in

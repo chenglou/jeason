@@ -16,16 +16,16 @@ let print_version () =
     FlowConfig.version
 
 let expand_path file =
-  let path = Path.make file in
-  if Path.file_exists path
-  then Path.to_string path
+  let path = PathFlow.make file in
+  if PathFlow.file_exists path
+  then PathFlow.to_string path
   else
     let file = Filename.concat (Sys.getcwd()) file in
-    let path = Path.make file in
-    if Path.file_exists path
-    then Path.to_string path
+    let path = PathFlow.make file in
+    if PathFlow.file_exists path
+    then PathFlow.to_string path
     else begin
-      let msg = Printf.sprintf "File not found: %s" (Path.to_string path) in
+      let msg = Printf.sprintf "File not found: %s" (PathFlow.to_string path) in
       FlowExitStatus.(exit ~msg Input_error)
     end
 
@@ -322,7 +322,7 @@ let server_flags prev = CommandSpec.ArgSpec.(
 let ignores_of_arg root patterns extras =
   let patterns = List.rev_append extras patterns in
   List.map (fun s ->
-   let root = Path.to_string root
+   let root = PathFlow.to_string root
      |> Sys_utils.normalize_filename_dir_sep in
    let reg = s
      |> Str.split_delim FlowConfig.project_root_token
@@ -340,7 +340,7 @@ let includes_of_arg root paths =
 let connect server_flags root =
   let flowconfig = Server_files_js.config_file root in
   let config_options = FlowConfig.((get flowconfig).options) in
-  let normalize dir = Path.(dir |> make |> to_string) in
+  let normalize dir = PathFlow.(dir |> make |> to_string) in
   let tmp_dir = Option.value_map
     ~f:normalize
     ~default:config_options.FlowConfig.Opts.temp_dir
@@ -349,7 +349,7 @@ let connect server_flags root =
     ~f:(fun dirs -> dirs |> Str.split (Str.regexp ",") |> List.map normalize)
     server_flags.shm_dirs in
   let log_file =
-    Path.to_string (Server_files_js.log_file ~tmp_dir root config_options) in
+    PathFlow.to_string (Server_files_js.log_file ~tmp_dir root config_options) in
   let retries = server_flags.retries in
   let retry_if_init = server_flags.retry_if_init in
   let expiry = match server_flags.timeout with
@@ -372,11 +372,11 @@ let connect server_flags root =
   } in
   CommandConnect.connect env
 
-let rec search_for_root config start recursion_limit : Path.t option =
-  if start = Path.parent start then None (* Reach fs root, nothing to do. *)
-  else if Path.file_exists (Path.concat start config) then Some start
+let rec search_for_root config start recursion_limit : PathFlow.t option =
+  if start = PathFlow.parent start then None (* Reach fs root, nothing to do. *)
+  else if PathFlow.file_exists (PathFlow.concat start config) then Some start
   else if recursion_limit <= 0 then None
-  else search_for_root config (Path.parent start) (recursion_limit - 1)
+  else search_for_root config (PathFlow.parent start) (recursion_limit - 1)
 
 (* Given a valid file or directory, find a valid Flow root directory *)
 (* NOTE: exists on invalid file or .flowconfig not found! *)
@@ -394,9 +394,9 @@ let guess_root dir_or_file =
     let dir = if Sys.is_directory dir_or_file
       then dir_or_file
       else Filename.dirname dir_or_file in
-    match search_for_root ".flowconfig" (Path.make dir) 50 with
+    match search_for_root ".flowconfig" (PathFlow.make dir) 50 with
     | Some root ->
-        FlowEventLogger.set_root (Some (Path.to_string root));
+        FlowEventLogger.set_root (Some (PathFlow.to_string root));
         root
     | None ->
         let msg = spf
@@ -416,15 +416,15 @@ let convert_input_pos (line, column) =
 
 (* copied (and adapted) from Hack's ClientCheck module *)
 let get_path_of_file file =
-  let path = Path.make file in
-  if Path.file_exists path
-  then Path.to_string path
+  let path = PathFlow.make file in
+  if PathFlow.file_exists path
+  then PathFlow.to_string path
   else
     (* Filename.concat does not return a normalized path when the file does
        not exist. Thus, we do it on our own... *)
     let file = Files.normalize_path (Sys.getcwd()) file in
-    let path = Path.make file in
-    Path.to_string path
+    let path = PathFlow.make file in
+    PathFlow.to_string path
 
 let get_file_from_filename_or_stdin path = function
   | Some filename ->

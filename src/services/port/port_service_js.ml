@@ -12,7 +12,7 @@ open Utils_js
 
 let port_file (file: string) : (string, exn) ok_or_err =
   try
-    let file = Path.to_string (Path.make file) in
+    let file = PathFlow.to_string (PathFlow.make file) in
     let ast = Parsing_service_js.get_ast_unsafe (Loc.SourceFile file) in
     let content = Sys_utils.cat file in
     let lines = Str.split_delim (Str.regexp "\n") content in

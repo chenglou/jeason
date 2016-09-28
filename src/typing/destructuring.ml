@@ -256,6 +256,6 @@ let destructuring_assignment cx ~expr rhs_t init =
   let f loc name _default t =
     (* TODO destructuring+defaults unsupported in assignment expressions *)
     let reason = mk_reason (spf "assignment of identifier `%s`" name) loc in
-    ignore Env.(set_var cx name t reason)
+    ignore EnvFlow.(set_var cx name t reason)
   in
   destructuring cx ~expr rhs_t (Some init) None ~f

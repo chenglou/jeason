@@ -146,13 +146,13 @@ let to_string =
 (** change tracking **)
 (** provides an API over a global stack of changesets to track
     read/write ops and refinements as AST traversal duing infer
-    drives calls into Env module.
+    drives calls into EnvFlow module.
     (Kill globals TODO: move to context.)
   *)
 
 (* due to the current dependency situation, we locate the
    global changeset stack here for now, so it can be accessed
-   from both Env and Flow_js. *)
+   from both EnvFlow and Flow_js. *)
 
 type 'a stack = 'a list ref
 let changesets: t stack = ref []

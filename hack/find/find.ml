@@ -23,7 +23,7 @@ let lstat_kind file =
 
 let fold_files (type t)
     ?max_depth ?(filter=(fun _ -> true)) ?(file_only = false)
-    (paths: Path.t list) (action: string -> t -> t) (init: t) =
+    (paths: PathFlow.t list) (action: string -> t -> t) (init: t) =
   let rec fold depth acc dir =
     let acc = if not file_only && filter dir then action dir acc else acc in
     if max_depth = Some depth then
@@ -39,7 +39,7 @@ let fold_files (type t)
            | Some S_DIR -> fold (depth+1) acc file
            | _ -> acc)
         acc files in
-  let paths = List.map paths Path.to_string in
+  let paths = List.map paths PathFlow.to_string in
   List.fold_left paths ~init ~f:(fold 0)
 
 let iter_files ?max_depth ?filter ?file_only paths action =
@@ -82,8 +82,8 @@ let make_next_files ?name:_ ?(filter = fun _ -> true) ?(others=[]) root =
     | Nil -> (acc, Nil)
     | Dir (files, dir, stack) -> process sz acc files dir stack in
   let state =
-    ref (Dir (Path.to_string root ::
-              List.map ~f:Path.to_string others, "", Nil)) in
+    ref (Dir (PathFlow.to_string root ::
+              List.map ~f:PathFlow.to_string others, "", Nil)) in
   fun () ->
     let res, st = process_stack 0 [] !state in
     state := st;

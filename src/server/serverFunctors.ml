@@ -23,7 +23,7 @@ module type SERVER_PROGRAM = sig
   (* filter and relativize updated file paths *)
   val process_updates : genv -> env -> SSet.t -> FilenameSet.t
   val recheck: genv -> env -> FilenameSet.t -> env
-  val get_watch_paths: Options.t -> Path.t list
+  val get_watch_paths: Options.t -> PathFlow.t list
   val name: string
   val handle_client : genv -> env -> client -> env
 end
@@ -211,7 +211,7 @@ end = struct
      * foo.log.old. On Linux/OSX this is easy, we just call rename. On Windows,
      * the rename can fail if foo.log is open or if foo.log.old already exists.
      * Not a huge problem, we just need to be more intentional *)
-    let file = Path.to_string (Options.log_file options) in
+    let file = PathFlow.to_string (Options.log_file options) in
 
     if Sys.file_exists file
     then begin
@@ -378,11 +378,11 @@ end = struct
     then begin
       let msg = spf
         "Error: There is already a server running for %s"
-        (Path.to_string root) in
+        (PathFlow.to_string root) in
       FlowExitStatus.(exit ~msg Lock_stolen)
     end;
 
-    let log_file = Path.to_string (Options.log_file options) in
+    let log_file = PathFlow.to_string (Options.log_file options) in
     let log_fd = open_log_file options in
     let config_file = Server_files_js.config_file root in
     (* Daemon.spawn is creating a new process with log_fd as both the stdout

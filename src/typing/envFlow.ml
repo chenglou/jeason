@@ -308,7 +308,7 @@ let global_lexicals = [
    of the GetPropT types created in the call to Flow_js.get_builtin.
 
    This means that we have some false negatives, currently.
-   Errors that go unreported currently include:
+   ErrorsFlow that go unreported currently include:
    - type aliases referred to from value positions
    - global consts assigned to locally
    The first is especially problematic, since it will actually

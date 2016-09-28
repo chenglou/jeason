@@ -10,17 +10,17 @@
 
 val make_next_files:
   ?name: string ->
-  ?filter:(string -> bool) -> ?others: Path.t list -> Path.t ->
+  ?filter:(string -> bool) -> ?others: PathFlow.t list -> PathFlow.t ->
   (unit -> string list)
 
 val find:
   ?max_depth:int -> ?filter:(string -> bool) -> ?file_only:bool ->
-  Path.t list -> string list
+  PathFlow.t list -> string list
 
 val find_with_name:
   ?max_depth:int -> ?file_only:bool ->
-  Path.t list -> string -> string list
+  PathFlow.t list -> string -> string list
 
 val iter_files:
   ?max_depth:int -> ?filter:(string -> bool) -> ?file_only:bool ->
-  Path.t list -> (string -> unit) -> unit
+  PathFlow.t list -> (string -> unit) -> unit

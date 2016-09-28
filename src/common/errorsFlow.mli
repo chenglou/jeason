@@ -46,7 +46,7 @@ val internal_error: Loc.filename -> string -> error
 val is_duplicate_provider_error: error -> bool
 
 val parse_error_to_flow_error : (Loc.t * Parse_error.t) -> error
-val strip_root_from_errors: Path.t -> error list -> error list
+val strip_root_from_errors: PathFlow.t -> error list -> error list
 
 val loc_of_error: error -> Loc.t
 val infos_of_error: error -> info list
@@ -71,12 +71,12 @@ end
 
 (* formatters/printers *)
 
-type stdin_file = (Path.t * string) option
+type stdin_file = (PathFlow.t * string) option
 
 val deprecated_json_props_of_loc : Loc.t -> (string * Hh_json.json) list
 val json_of_errors : error list -> Hh_json.json
 val json_of_errors_with_context :
-  root: Path.t ->
+  root: PathFlow.t ->
   stdin_file: stdin_file ->
   error list ->
   Hh_json.json
@@ -87,12 +87,12 @@ val print_error_color_new:
   strip_root:bool ->
   one_line:bool ->
   color:Tty.color_mode ->
-  root: Path.t ->
+  root: PathFlow.t ->
   error ->
   unit
 
 val print_error_json :
-  root:Path.t ->
+  root:PathFlow.t ->
   ?pretty:bool ->
   ?timing:Timing.t option ->
   ?stdin_file:stdin_file ->
@@ -106,7 +106,7 @@ val print_error_summary:
   flags:Options.error_flags ->
   ?stdin_file:stdin_file ->
   strip_root: bool ->
-  root: Path.t ->
+  root: PathFlow.t ->
   error list ->
   unit
 
