@@ -139,7 +139,8 @@ BYTECODE_LINKER_FLAGS=$(NATIVE_OBJECT_FILES) $(NATIVE_LIB_OPTS) $(EXTRA_LIB_OPTS
 LINKER_FLAGS=$(BYTECODE_LINKER_FLAGS) $(SECTCREATE)
 
 
-all: $(FLOWLIB) build-flow copy-flow-files
+# all: $(FLOWLIB) build-flow copy-flow-files
+all: build-flow
 all-ocp: build-flow-with-ocp copy-flow-files-ocp
 
 clean:
@@ -153,9 +154,8 @@ clean-ocp: clean
 	rm -f $(OCP_BUILD_FILES)
 
 build-flow: $(BUILT_OBJECT_FILES) $(FLOWLIB)
-	# ocamlbuild -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/main.native
 	ocamlbuild -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)"  -package compiler-libs.common src/main.native
-	ocamlbuild  -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.native
+	# ocamlbuild  -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.native
 
 %.ocp: %.ocp.fb scripts/utils.ml scripts/ocp_build_glob.ml
 	ocaml -I scripts -w -3 str.cma unix.cma scripts/ocp_build_glob.ml $(addsuffix .fb,$@) $@

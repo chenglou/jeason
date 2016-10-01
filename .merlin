@@ -3,4 +3,4 @@ S hack/**
 
 B _build/**
 
-PKG js_of_ocaml compiler-libs
+PKG js_of_ocaml compiler-libs compiler-libs.bytecomp compiler-libs.common compiler-libs.optcomp compiler-libs.toplevel
