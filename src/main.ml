@@ -2,53 +2,158 @@ open Ast_helper
 open Asttypes
 open Parsetree
 open Longident
-let defaultStructure =
-  Str.mk
-    ((Pstr_value
-        (Nonrecursive,
-          [{
-             pvb_pat =
-               (Pat.var { loc = (default_loc.contents); txt = "myVar" });
-             pvb_expr =
-               (Exp.construct
-                  {
-                    loc = (default_loc.contents);
-                    txt = ((Lident ("()"))[@explicit_arity ])
-                  } None);
-             pvb_attributes = [];
-             pvb_loc = (default_loc.contents)
-           }]))[@explicit_arity ])
-let expressionMapper (expression : Parser_flow.Ast.Expression.t) =
-  (ignore expression; defaultStructure : Parsetree.structure_item)
+let defaultStructures =
+  [Str.mk
+     ((Pstr_value
+         (Nonrecursive,
+           [{
+              pvb_pat =
+                (Pat.var { loc = (default_loc.contents); txt = "myVar" });
+              pvb_expr =
+                (Exp.construct
+                   {
+                     loc = (default_loc.contents);
+                     txt = ((Lident ("()"))[@explicit_arity ])
+                   } None);
+              pvb_attributes = [];
+              pvb_loc = (default_loc.contents)
+            }]))[@explicit_arity ])]
+let expressionMapperOld (expression : Parser_flow.Ast.Expression.t) =
+  (ignore expression; defaultStructures : Parsetree.structure_item list)
 let patternMapper (pattern : Parser_flow.Ast.Pattern.t) =
-  (ignore pattern; defaultStructure : Parsetree.structure_item)
+  (ignore pattern; defaultStructures : Parsetree.structure_item list)
+let expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
+  (let defaultExpression =
+     Exp.construct
+       {
+         loc = (default_loc.contents);
+         txt = ((Lident ("()"))[@explicit_arity ])
+       } None in
+   let open Parser_flow.Ast in
+     let open Parser_flow.Ast.Expression in
+       match expression with
+       | Parser_flow.Ast.Expression.This  -> defaultExpression
+       | Parser_flow.Ast.Expression.Array _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Object _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Function _ -> defaultExpression
+       | Parser_flow.Ast.Expression.ArrowFunction _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Sequence _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Unary _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Binary _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Assignment _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Update _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Logical _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Conditional _ -> defaultExpression
+       | Parser_flow.Ast.Expression.New _ -> defaultExpression
+       | ((Parser_flow.Ast.Expression.Call
+           ({ Call.callee = (_,callee); arguments }))[@explicit_arity ]) ->
+           (match (callee, arguments) with
+            | (((Member
+               ({
+                  Member._object =
+                    (_,((Identifier
+                     (_,{ Identifier.name = "React";_}))[@implicit_arity ]));
+                  property = ((Member.PropertyIdentifier
+                    (_,{ Identifier.name = "createClass";_}))[@implicit_arity
+                                                               ]);_}))
+               [@explicit_arity ]),((Expression
+               (_,((Object
+                ({ Object.properties = properties }))[@explicit_arity ])))
+               [@implicit_arity ])::[]) ->
+                let createClassSpec =
+                  properties |>
+                    (List.map
+                       (fun property  ->
+                          match property with
+                          | Object.SpreadProperty _ ->
+                              Cf.val_
+                                {
+                                  loc = (default_loc.contents);
+                                  txt = "thereIsASpreadHere"
+                                } Immutable
+                                ((Cfk_concrete
+                                    (Fresh,
+                                      (Exp.ident
+                                         {
+                                           loc = (default_loc.contents);
+                                           txt =
+                                             ((Lident
+                                                 ("iDontKnowHowToTransformIt"))
+                                             [@explicit_arity ])
+                                         })))[@explicit_arity ])
+                          | Object.Property _ ->
+                              Cf.val_
+                                {
+                                  loc = (default_loc.contents);
+                                  txt = "render"
+                                } Immutable
+                                ((Cfk_concrete
+                                    (Fresh,
+                                      (Exp.ident
+                                         {
+                                           loc = (default_loc.contents);
+                                           txt =
+                                             ((Lident ("kek"))[@explicit_arity
+                                                                ])
+                                         })))[@explicit_arity ]))) in
+                let createClassObj =
+                  Exp.object_
+                    (Cstr.mk
+                       (Pat.mk
+                          ((Ppat_var
+                              ({ loc = (default_loc.contents); txt = "this" }))
+                          [@explicit_arity ])) createClassSpec) in
+                Exp.apply
+                  (Exp.ident
+                     {
+                       loc = (default_loc.contents);
+                       txt =
+                         ((Ldot
+                             (((Lident ("ReactRe"))[@explicit_arity ]),
+                               "createClass"))[@explicit_arity ])
+                     }) [("", createClassObj)]
+            | _ -> defaultExpression)
+       | Parser_flow.Ast.Expression.Member _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Yield _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Comprehension _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Generator _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Let _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Identifier _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Literal _ -> defaultExpression
+       | Parser_flow.Ast.Expression.TemplateLiteral _ -> defaultExpression
+       | Parser_flow.Ast.Expression.TaggedTemplate _ -> defaultExpression
+       | Parser_flow.Ast.Expression.JSXElement _ -> defaultExpression
+       | Parser_flow.Ast.Expression.Class _ -> defaultExpression
+       | Parser_flow.Ast.Expression.TypeCast _ -> defaultExpression
+       | Parser_flow.Ast.Expression.MetaProperty _ -> defaultExpression : 
+  Parsetree.expression)
 let statementsMapper statementWrap =
   match statementWrap with
   | (_,statement) ->
       let open Parser_flow.Ast.Statement in
         (match statement with
-         | Parser_flow.Ast.Statement.Empty  -> defaultStructure
-         | Parser_flow.Ast.Statement.Block _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Expression _ -> defaultStructure
-         | Parser_flow.Ast.Statement.If _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Labeled _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Break _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Continue _ -> defaultStructure
-         | Parser_flow.Ast.Statement.With _ -> defaultStructure
-         | Parser_flow.Ast.Statement.TypeAlias _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Switch _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Return _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Throw _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Try _ -> defaultStructure
-         | Parser_flow.Ast.Statement.While _ -> defaultStructure
-         | Parser_flow.Ast.Statement.DoWhile _ -> defaultStructure
-         | Parser_flow.Ast.Statement.For _ -> defaultStructure
-         | Parser_flow.Ast.Statement.ForIn _ -> defaultStructure
-         | Parser_flow.Ast.Statement.ForOf _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Let _ -> defaultStructure
-         | Parser_flow.Ast.Statement.Debugger  -> defaultStructure
+         | Parser_flow.Ast.Statement.Empty  -> defaultStructures
+         | Parser_flow.Ast.Statement.Block _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Expression _ -> defaultStructures
+         | Parser_flow.Ast.Statement.If _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Labeled _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Break _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Continue _ -> defaultStructures
+         | Parser_flow.Ast.Statement.With _ -> defaultStructures
+         | Parser_flow.Ast.Statement.TypeAlias _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Switch _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Return _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Throw _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Try _ -> defaultStructures
+         | Parser_flow.Ast.Statement.While _ -> defaultStructures
+         | Parser_flow.Ast.Statement.DoWhile _ -> defaultStructures
+         | Parser_flow.Ast.Statement.For _ -> defaultStructures
+         | Parser_flow.Ast.Statement.ForIn _ -> defaultStructures
+         | Parser_flow.Ast.Statement.ForOf _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Let _ -> defaultStructures
+         | Parser_flow.Ast.Statement.Debugger  -> defaultStructures
          | Parser_flow.Ast.Statement.FunctionDeclaration _ ->
-             defaultStructure
+             defaultStructures
          | ((Parser_flow.Ast.Statement.VariableDeclaration
              ({ VariableDeclaration.kind = kind; declarations }))[@explicit_arity
                                                                    ])
@@ -56,59 +161,46 @@ let statementsMapper statementWrap =
              (match kind with
               | VariableDeclaration.Let  ->
                   let open Parser_flow.Ast.Statement.VariableDeclaration.Declarator in
-                    (declarations |>
-                       (List.map
-                          (fun (_,t)  ->
-                             let initialValue: Parsetree.expression =
-                               match t.init with
-                               | None  ->
-                                   Exp.construct
-                                     {
-                                       loc = (default_loc.contents);
-                                       txt =
-                                         ((Lident ("()"))[@explicit_arity ])
-                                     } None
-                               | Some _ ->
-                                   Exp.construct
-                                     {
-                                       loc = (default_loc.contents);
-                                       txt =
-                                         ((Lident ("()"))[@explicit_arity ])
-                                     } None in
-                             ignore initialValue;
-                             Str.value Nonrecursive
-                               [{
-                                  pvb_pat =
-                                    (Pat.var
-                                       {
-                                         loc = (default_loc.contents);
-                                         txt = "myVar"
-                                       });
-                                  pvb_expr =
-                                    (Exp.construct
-                                       {
-                                         loc = (default_loc.contents);
-                                         txt =
-                                           ((Lident ("()"))[@explicit_arity ])
-                                       } None);
-                                  pvb_attributes = [];
-                                  pvb_loc = (default_loc.contents)
-                                }])))
-                      |> List.hd
-              | _ -> defaultStructure)
-         | Parser_flow.Ast.Statement.ClassDeclaration _ -> defaultStructure
+                    declarations |>
+                      (List.map
+                         (fun (_,t)  ->
+                            let initialValue: Parsetree.expression =
+                              match t.init with
+                              | None  ->
+                                  Exp.construct
+                                    {
+                                      loc = (default_loc.contents);
+                                      txt =
+                                        ((Lident ("()"))[@explicit_arity ])
+                                    } None
+                              | ((Some (expr))[@explicit_arity ]) ->
+                                  expressionMapper expr in
+                            Str.value Nonrecursive
+                              [{
+                                 pvb_pat =
+                                   (Pat.var
+                                      {
+                                        loc = (default_loc.contents);
+                                        txt = "myVar"
+                                      });
+                                 pvb_expr = initialValue;
+                                 pvb_attributes = [];
+                                 pvb_loc = (default_loc.contents)
+                               }]))
+              | _ -> defaultStructures)
+         | Parser_flow.Ast.Statement.ClassDeclaration _ -> defaultStructures
          | Parser_flow.Ast.Statement.InterfaceDeclaration _ ->
-             defaultStructure
-         | Parser_flow.Ast.Statement.DeclareVariable _ -> defaultStructure
-         | Parser_flow.Ast.Statement.DeclareFunction _ -> defaultStructure
-         | Parser_flow.Ast.Statement.DeclareClass _ -> defaultStructure
-         | Parser_flow.Ast.Statement.DeclareModule _ -> defaultStructure
+             defaultStructures
+         | Parser_flow.Ast.Statement.DeclareVariable _ -> defaultStructures
+         | Parser_flow.Ast.Statement.DeclareFunction _ -> defaultStructures
+         | Parser_flow.Ast.Statement.DeclareClass _ -> defaultStructures
+         | Parser_flow.Ast.Statement.DeclareModule _ -> defaultStructures
          | Parser_flow.Ast.Statement.DeclareModuleExports _ ->
-             defaultStructure
+             defaultStructures
          | Parser_flow.Ast.Statement.DeclareExportDeclaration _ ->
-             defaultStructure
-         | Parser_flow.Ast.Statement.ExportDeclaration _ -> defaultStructure
-         | Parser_flow.Ast.Statement.ImportDeclaration _ -> defaultStructure)
+             defaultStructures
+         | Parser_flow.Ast.Statement.ExportDeclaration _ -> defaultStructures
+         | Parser_flow.Ast.Statement.ImportDeclaration _ -> defaultStructures)
 let () =
   let parse_options =
     Some
@@ -130,6 +222,7 @@ let () =
   output_string stdout Config.ast_impl_magic_number;
   output_value stdout file;
   (let result: Parsetree.structure =
-     statements |>
-       (List.map (fun statementWrap  -> statementsMapper statementWrap)) in
+     (statements |>
+        (List.map (fun statementWrap  -> statementsMapper statementWrap)))
+       |> List.concat in
    output_value stdout result)
