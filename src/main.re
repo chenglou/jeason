@@ -34,7 +34,9 @@ let patternMapper (pattern: Parser_flow.Ast.Pattern.t) :list Parsetree.structure
   defaultStructures
 };
 
-let expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression => {
+let astHelperStr a => {loc: default_loc.contents, txt: a};
+
+let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression => {
   let defaultExpression = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
@@ -42,7 +44,11 @@ let expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
       | Parser_flow.Ast.Expression.This => defaultExpression
       | Parser_flow.Ast.Expression.Array _ => defaultExpression
       | Parser_flow.Ast.Expression.Object _ => defaultExpression
-      | Parser_flow.Ast.Expression.Function _ => defaultExpression
+      | Parser_flow.Ast.Expression.Function {Function.params: params, body, expression, _} =>
+        ignore params;
+        ignore body;
+        ignore expression;
+        Exp.fun_ "" None (Pat.var (astHelperStr "foo")) (Exp.constant (Const_int 1))
       | Parser_flow.Ast.Expression.ArrowFunction _ => defaultExpression
       | Parser_flow.Ast.Expression.Sequence _ => defaultExpression
       | Parser_flow.Ast.Expression.Unary _ => defaultExpression
@@ -69,27 +75,38 @@ let expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
               fun property =>
                 Object.(
                   switch property {
-                  | SpreadProperty _ =>
+                  | Property
+                      _
+                      {
+                        Property.key:
+                          Property.Identifier _ {Identifier.name: name, _} [@implicit_arity],
+                        value: (_, value) as valueWrap,
+                        kind: Property.Init,
+                        _
+                      }
+                    [@implicit_arity] =>
+                    switch value {
+                    | Function _
+                    | ArrowFunction _ =>
+                      Cf.method_
+                        (astHelperStr name)
+                        Public
+                        /* TODO: might not be able to recurse. Might need to be binding specific */
+                        (Cfk_concrete Fresh (Exp.poly (expressionMapper valueWrap) None))
+                    | _ =>
+                      Cf.val_
+                        {loc: default_loc.contents, txt: name}
+                        Immutable
+                        /* TODO: might not be able to recurse. Might need to be binding specific */
+                        (Cfk_concrete Fresh (expressionMapper valueWrap))
+                    }
+                  | _ =>
                     Cf.val_
-                      {loc: default_loc.contents, txt: "thereIsASpreadHere"}
+                      {loc: default_loc.contents, txt: "notSureWhat"}
                       Immutable
                       (
                         Cfk_concrete
-                          Fresh
-                          (
-                            Exp.ident {
-                              loc: default_loc.contents,
-                              txt: Lident "iDontKnowHowToTransformIt"
-                            }
-                          )
-                      )
-                  | Property (_, {Property.key: key, value, kind, _method, shorthand}) =>
-                    Cf.val_
-                      {loc: default_loc.contents, txt: "render"}
-                      Immutable
-                      (
-                        Cfk_concrete
-                          Fresh (Exp.ident {loc: default_loc.contents, txt: Lident "kek"})
+                          Fresh (Exp.ident {loc: default_loc.contents, txt: Lident "thisIs"})
                       )
                   }
                 )

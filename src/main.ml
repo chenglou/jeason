@@ -22,7 +22,8 @@ let expressionMapperOld (expression : Parser_flow.Ast.Expression.t) =
   (ignore expression; defaultStructures : Parsetree.structure_item list)
 let patternMapper (pattern : Parser_flow.Ast.Pattern.t) =
   (ignore pattern; defaultStructures : Parsetree.structure_item list)
-let expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
+let astHelperStr a = { loc = (default_loc.contents); txt = a }
+let rec expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
   (let defaultExpression =
      Exp.construct
        {
@@ -35,7 +36,15 @@ let expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
        | Parser_flow.Ast.Expression.This  -> defaultExpression
        | Parser_flow.Ast.Expression.Array _ -> defaultExpression
        | Parser_flow.Ast.Expression.Object _ -> defaultExpression
-       | Parser_flow.Ast.Expression.Function _ -> defaultExpression
+       | ((Parser_flow.Ast.Expression.Function
+           ({ Function.params = params; body; expression;_}))[@explicit_arity
+                                                               ])
+           ->
+           (ignore params;
+            ignore body;
+            ignore expression;
+            Exp.fun_ "" None (Pat.var (astHelperStr "foo"))
+              (Exp.constant ((Const_int (1))[@explicit_arity ])))
        | Parser_flow.Ast.Expression.ArrowFunction _ -> defaultExpression
        | Parser_flow.Ast.Expression.Sequence _ -> defaultExpression
        | Parser_flow.Ast.Expression.Unary _ -> defaultExpression
@@ -64,38 +73,50 @@ let expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
                   properties |>
                     (List.map
                        (fun property  ->
-                          match property with
-                          | Object.SpreadProperty _ ->
-                              Cf.val_
-                                {
-                                  loc = (default_loc.contents);
-                                  txt = "thereIsASpreadHere"
-                                } Immutable
-                                ((Cfk_concrete
-                                    (Fresh,
-                                      (Exp.ident
-                                         {
-                                           loc = (default_loc.contents);
-                                           txt =
-                                             ((Lident
-                                                 ("iDontKnowHowToTransformIt"))
-                                             [@explicit_arity ])
-                                         })))[@explicit_arity ])
-                          | Object.Property _ ->
-                              Cf.val_
-                                {
-                                  loc = (default_loc.contents);
-                                  txt = "render"
-                                } Immutable
-                                ((Cfk_concrete
-                                    (Fresh,
-                                      (Exp.ident
-                                         {
-                                           loc = (default_loc.contents);
-                                           txt =
-                                             ((Lident ("kek"))[@explicit_arity
-                                                                ])
-                                         })))[@explicit_arity ]))) in
+                          let open Object in
+                            match property with
+                            | ((Property
+                                (_,{
+                                     Property.key = ((Property.Identifier
+                                       (_,{ Identifier.name = name;_}))
+                                       [@implicit_arity ]);
+                                     value = ((_,value) as valueWrap);
+                                     kind = Property.Init ;_}))[@implicit_arity
+                                                                 ])
+                                ->
+                                (match value with
+                                 | Function _|ArrowFunction _ ->
+                                     Cf.method_ (astHelperStr name) Private
+                                       ((Cfk_concrete
+                                           (Fresh,
+                                             (Exp.poly
+                                                (expressionMapper valueWrap)
+                                                None)))[@explicit_arity ])
+                                 | _ ->
+                                     Cf.val_
+                                       {
+                                         loc = (default_loc.contents);
+                                         txt = name
+                                       } Immutable
+                                       ((Cfk_concrete
+                                           (Fresh,
+                                             (expressionMapper valueWrap)))
+                                       [@explicit_arity ]))
+                            | _ ->
+                                Cf.val_
+                                  {
+                                    loc = (default_loc.contents);
+                                    txt = "notSureWhat"
+                                  } Immutable
+                                  ((Cfk_concrete
+                                      (Fresh,
+                                        (Exp.ident
+                                           {
+                                             loc = (default_loc.contents);
+                                             txt =
+                                               ((Lident ("thisIs"))[@explicit_arity
+                                                                    ])
+                                           })))[@explicit_arity ]))) in
                 let createClassObj =
                   Exp.object_
                     (Cstr.mk
