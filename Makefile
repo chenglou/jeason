@@ -108,12 +108,12 @@ JS_STUBS=\
 	$(wildcard js/*.js)
 
 # We need caml_hexstring_of_float for js_of_ocaml < 2.8
-JSOO_VERSION=$(shell which js_of_ocaml 2> /dev/null > /dev/null && js_of_ocaml --version)
-JSOO_MAJOR=$(shell echo $(JSOO_VERSION) | cut -d. -f 1)
-JSOO_MINOR=$(shell echo $(JSOO_VERSION) | cut -d. -f 2)
-ifeq (1, $(shell [ $(JSOO_MAJOR) -gt 2 ] || [ $(JSOO_MAJOR) -eq 2 -a $(JSOO_MINOR) -gt 7 ]; echo $$?))
-	JS_STUBS += js/optional/caml_hexstring_of_float.js
-endif
+# JSOO_VERSION=$(shell which js_of_ocaml 2> /dev/null > /dev/null && js_of_ocaml --version)
+# JSOO_MAJOR=$(shell echo $(JSOO_VERSION) | cut -d. -f 1)
+# JSOO_MINOR=$(shell echo $(JSOO_VERSION) | cut -d. -f 2)
+# ifeq (1, $(shell [ $(JSOO_MAJOR) -gt 2 ] || [ $(JSOO_MAJOR) -eq 2 -a $(JSOO_MINOR) -gt 7 ]; echo $$?))
+# 	JS_STUBS += js/optional/caml_hexstring_of_float.js
+# endif
 
 ################################################################################
 #                                    Rules                                     #
@@ -255,7 +255,7 @@ js: $(BUILT_OBJECT_FILES)
 
 FORCE:
 
-.PHONY: all js build-flow build-flow-with-ocp build-flow-debug FORCE
+.PHONY: all build-flow build-flow-with-ocp build-flow-debug FORCE
 
 # This rule runs if any .ml or .mli file has been touched. It recursively calls
 # ocamldep to figure out all the modules that we use to build src/flow.ml

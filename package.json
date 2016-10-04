@@ -40,5 +40,8 @@
   },
   "scripts": {
     "test": "make test"
+  },
+  "devDependencies": {
+    "@opam-alpha/js_of_ocaml": "^2.8.2"
   }
 }
