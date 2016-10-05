@@ -13,7 +13,7 @@ let defaultStructures = [
       Nonrecursive
       [
         {
-          pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
+          pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar2"},
           pvb_expr: Exp.construct {loc: default_loc.contents, txt: Lident "()"} None,
           pvb_attributes: [],
           pvb_loc: default_loc.contents
@@ -199,11 +199,21 @@ let statementsMapper statementWrap =>
                 Str.value
                   Nonrecursive
                   [
-                    {
-                      pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
-                      pvb_expr: initialValue,
-                      pvb_attributes: [],
-                      pvb_loc: default_loc.contents
+                    switch (t.id){
+                      | (_, Parser_flow.Ast.Pattern.Identifier x) => {
+                        let (_, x) = x;
+                        {
+                        pvb_pat: Pat.var {loc: default_loc.contents, txt: Parser_flow.Ast.Identifier.(x.name)},
+                        pvb_expr: initialValue,
+                        pvb_attributes: [],
+                        pvb_loc: default_loc.contents
+                      }}
+                      | (_) => {
+                        pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
+                        pvb_expr: initialValue,
+                        pvb_attributes: [],
+                        pvb_loc: default_loc.contents
+                      }
                     }
                   ]
               }

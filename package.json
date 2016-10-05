@@ -2,6 +2,7 @@
   "name": "flow-dev-tools",
   "version": "0.1.0",
   "dependencies": {
+    "@opam-alpha/js_of_ocaml": "^2.8.2",
     "babel-plugin-syntax-async-functions": "^6.8.0",
     "babel-plugin-syntax-flow": "^6.8.0",
     "babel-plugin-syntax-trailing-function-commas": "^6.8.0",
@@ -14,6 +15,7 @@
     "babylon": "^6.11.2",
     "blessed": "^0.1.81",
     "colors": "~1.1.2",
+    "dependency-env": "github:npm-ml/dependency-env",
     "diff": "~2.2.1",
     "flow-parser": "~0.21.0",
     "glob": "^7.0.3",
@@ -23,6 +25,9 @@
     "rimraf": "^2.5.2",
     "sane": "^1.4.0",
     "source-map-support": "~0.4.0",
+    "nopam": "https://github.com/yunxing/nopam.git",
+    "reason": "https://github.com/facebook/reason.git",
+	"@opam-alpha/merlin": "^ 2.5.0",
     "twit": "^2.1.5"
   },
   "babel": {
@@ -39,9 +44,26 @@
     ]
   },
   "scripts": {
-    "test": "make test"
+    "test": "make test",
+	"editor": "eval $(dependencyEnv) && atom ."
   },
   "devDependencies": {
-    "@opam-alpha/js_of_ocaml": "^2.8.2"
-  }
+  },
+  "description": "Flow is a static typechecker for JavaScript. To find out more about Flow, check out [flowtype.org](http://flowtype.org/).",
+  "main": "test.js",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenglou/flow.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chenglou/flow/issues"
+  },
+  "homepage": "https://github.com/chenglou/flow#readme"
 }

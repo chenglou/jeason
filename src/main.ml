@@ -8,7 +8,7 @@ let defaultStructures =
          (Nonrecursive,
            [{
               pvb_pat =
-                (Pat.var { loc = (default_loc.contents); txt = "myVar" });
+                (Pat.var { loc = (default_loc.contents); txt = "myVar2" });
               pvb_expr =
                 (Exp.construct
                    {
@@ -210,17 +210,35 @@ let statementsMapper statementWrap =
                               | ((Some (expr))[@explicit_arity ]) ->
                                   expressionMapper expr in
                             Str.value Nonrecursive
-                              [{
-                                 pvb_pat =
-                                   (Pat.var
-                                      {
-                                        loc = (default_loc.contents);
-                                        txt = "myVar"
-                                      });
-                                 pvb_expr = initialValue;
-                                 pvb_attributes = [];
-                                 pvb_loc = (default_loc.contents)
-                               }]))
+                              [(match t.id with
+                                | (_,((Parser_flow.Ast.Pattern.Identifier
+                                   (x))[@explicit_arity ])) ->
+                                    let (_,x) = x in
+                                    {
+                                      pvb_pat =
+                                        (Pat.var
+                                           {
+                                             loc = (default_loc.contents);
+                                             txt =
+                                               (let open Parser_flow.Ast.Identifier in
+                                                  x.name)
+                                           });
+                                      pvb_expr = initialValue;
+                                      pvb_attributes = [];
+                                      pvb_loc = (default_loc.contents)
+                                    }
+                                | _ ->
+                                    {
+                                      pvb_pat =
+                                        (Pat.var
+                                           {
+                                             loc = (default_loc.contents);
+                                             txt = "myVar"
+                                           });
+                                      pvb_expr = initialValue;
+                                      pvb_attributes = [];
+                                      pvb_loc = (default_loc.contents)
+                                    })]))
               | _ -> defaultStructures)
          | Parser_flow.Ast.Statement.ClassDeclaration _ -> defaultStructures
          | Parser_flow.Ast.Statement.InterfaceDeclaration _ ->
