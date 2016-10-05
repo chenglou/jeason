@@ -23,6 +23,8 @@ let expressionMapperOld (expression : Parser_flow.Ast.Expression.t) =
 let patternMapper (pattern : Parser_flow.Ast.Pattern.t) =
   (ignore pattern; defaultStructures : Parsetree.structure_item list)
 let astHelperStr a = { loc = (default_loc.contents); txt = a }
+let astHelperLid (a : Longident.t) =
+  { loc = (default_loc.contents); txt = a }
 let rec expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
   (let defaultExpression =
      Exp.construct
@@ -37,14 +39,25 @@ let rec expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
        | Parser_flow.Ast.Expression.Array _ -> defaultExpression
        | Parser_flow.Ast.Expression.Object _ -> defaultExpression
        | ((Parser_flow.Ast.Expression.Function
-           ({ Function.params = params; body; expression;_}))[@explicit_arity
-                                                               ])
-           ->
-           (ignore params;
+           ({ Function.params = (params,restParam); body; expression;_}))
+           [@explicit_arity ]) ->
+           (ignore restParam;
             ignore body;
             ignore expression;
-            Exp.fun_ "" None (Pat.var (astHelperStr "foo"))
-              (Exp.constant ((Const_int (1))[@explicit_arity ])))
+            List.fold_left
+              (fun expr'  ->
+                 fun (_,param)  ->
+                   match param with
+                   | ((Pattern.Identifier
+                       (_,{ Identifier.name = name;_}))[@implicit_arity ]) ->
+                       Exp.fun_ "" None
+                         (Pat.construct
+                            (astHelperLid ((Lident (name))[@explicit_arity ]))
+                            None) expr'
+                   | _ ->
+                       Exp.fun_ "" None (Pat.var (astHelperStr "fixme"))
+                         expr')
+              (Exp.constant ((Const_int (1))[@explicit_arity ])) params)
        | Parser_flow.Ast.Expression.ArrowFunction _ -> defaultExpression
        | Parser_flow.Ast.Expression.Sequence _ -> defaultExpression
        | Parser_flow.Ast.Expression.Unary _ -> defaultExpression
@@ -86,7 +99,7 @@ let rec expressionMapper ((_,expression) : Parser_flow.Ast.Expression.t) =
                                 ->
                                 (match value with
                                  | Function _|ArrowFunction _ ->
-                                     Cf.method_ (astHelperStr name) Private
+                                     Cf.method_ (astHelperStr name) Public
                                        ((Cfk_concrete
                                            (Fresh,
                                              (Exp.poly

@@ -36,6 +36,8 @@ let patternMapper (pattern: Parser_flow.Ast.Pattern.t) :list Parsetree.structure
 
 let astHelperStr a => {loc: default_loc.contents, txt: a};
 
+let astHelperLid (a: Longident.t) => {loc: default_loc.contents, txt: a};
+
 let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression => {
   let defaultExpression = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
   Parser_flow.Ast.(
@@ -44,11 +46,26 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
       | Parser_flow.Ast.Expression.This => defaultExpression
       | Parser_flow.Ast.Expression.Array _ => defaultExpression
       | Parser_flow.Ast.Expression.Object _ => defaultExpression
-      | Parser_flow.Ast.Expression.Function {Function.params: params, body, expression, _} =>
-        ignore params;
+      | Parser_flow.Ast.Expression.Function {
+          Function.params: (params, restParam),
+          body,
+          expression,
+          _
+        } =>
+        ignore restParam;
         ignore body;
         ignore expression;
-        Exp.fun_ "" None (Pat.var (astHelperStr "foo")) (Exp.constant (Const_int 1))
+        List.fold_left
+          (
+            fun expr' (_, param) =>
+              switch param {
+              | Pattern.Identifier _ {Identifier.name: name, _} [@implicit_arity] =>
+                Exp.fun_ "" None (Pat.construct (astHelperLid (Lident name)) None) expr'
+              | _ => Exp.fun_ "" None (Pat.var (astHelperStr "fixme")) expr'
+              }
+          )
+          (Exp.constant (Const_int 1))
+          params
       | Parser_flow.Ast.Expression.ArrowFunction _ => defaultExpression
       | Parser_flow.Ast.Expression.Sequence _ => defaultExpression
       | Parser_flow.Ast.Expression.Unary _ => defaultExpression
