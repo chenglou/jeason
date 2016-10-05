@@ -20,4 +20,3 @@ flow.docdir
 /flowlib.rc
 
 a.out
-src/main.ml

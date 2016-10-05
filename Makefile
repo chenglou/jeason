@@ -154,7 +154,7 @@ clean-ocp: clean
 	rm -f $(OCP_BUILD_FILES)
 
 build-flow: $(BUILT_OBJECT_FILES) $(FLOWLIB)
-	ocamlbuild -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)"  -package compiler-libs.common src/main.native
+	rebuild -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" -package compiler-libs.common src/main.native
 	# ocamlbuild  -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.native
 
 %.ocp: %.ocp.fb scripts/utils.ml scripts/ocp_build_glob.ml
