@@ -9,23 +9,6 @@ open Longident;
 
 let expUnit = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
 
-let placeholder = Exp.constant (Const_string "placeholder" None);
-
-let defaultStructures = [
-  Str.mk (
-    Pstr_value
-      Nonrecursive
-      [
-        {
-          pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar2"},
-          pvb_expr: expUnit,
-          pvb_attributes: [],
-          pvb_loc: default_loc.contents
-        }
-      ]
-  )
-];
-
 let astHelperStr a => {loc: default_loc.contents, txt: a};
 
 let astHelperLid (a: Longident.t) => {loc: default_loc.contents, txt: a};
@@ -37,7 +20,10 @@ let parseTreeValueBinding pat::pat expr::expr => {
   pvb_loc: default_loc.contents
 };
 
-let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Parsetree.expression =>
+let rec genericStatementMapper
+        notTopLevelInnerMostExpr::notTopLevelInnerMostExpr=?
+        ((_, statement): Parser_flow.Ast.Statement.t)
+        :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Statement.(
       switch statement {
@@ -47,7 +33,7 @@ let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Pa
         } =>
         /* this is the part that transforms non-top-level var declarations list (in a single var
            declaration) from js to like, let with a tuple or something in reason */
-        /* TODO: this lol */
+        /* TODO: actually do this lol */
         ignore kind;
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
         let expr =
@@ -55,12 +41,17 @@ let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Pa
           | None => expUnit
           | Some e => expressionMapper e
           };
+        let innerMostExpr =
+          switch notTopLevelInnerMostExpr {
+          | None => expUnit
+          | Some expr => expr
+          };
         switch id {
         | Pattern.Identifier (_, {Identifier.name: name, _}) =>
           Exp.let_
             Nonrecursive
             [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
-            expUnit
+            innerMostExpr
         | Pattern.Object _
         | Pattern.Array _
         | Pattern.Assignment _
@@ -69,14 +60,39 @@ let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Pa
         }
       | Parser_flow.Ast.Statement.Return {Return.argument: argument} =>
         /* TODO: warn against early return */
-        switch argument {
-        | None => expUnit
-        | Some expr => expressionMapper expr
+        let result =
+          switch argument {
+          | None => expUnit
+          | Some expr => expressionMapper expr
+          };
+        switch notTopLevelInnerMostExpr {
+        | None => result
+        | Some expr => Exp.sequence result expr
+        }
+      | Parser_flow.Ast.Statement.Expression {Expression.expression: expression} =>
+        let innerMostExpr =
+          switch notTopLevelInnerMostExpr {
+          | None => expUnit
+          | Some expr => expr
+          };
+        Exp.sequence (expressionMapper expression) innerMostExpr
+      | Parser_flow.Ast.Statement.If {If.test: test, consequent, alternate} =>
+        let result =
+          Exp.ifthenelse
+            (expressionMapper test)
+            (genericStatementMapper consequent)
+            (
+              switch alternate {
+              | None => None
+              | Some statement => Some (genericStatementMapper statement)
+              }
+            );
+        switch notTopLevelInnerMostExpr {
+        | None => result
+        | Some expr => Exp.sequence result expr
         }
       | Parser_flow.Ast.Statement.Empty
       | Parser_flow.Ast.Statement.Block _
-      | Parser_flow.Ast.Statement.Expression _
-      | Parser_flow.Ast.Statement.If _
       | Parser_flow.Ast.Statement.Labeled _
       | Parser_flow.Ast.Statement.Break _
       | Parser_flow.Ast.Statement.Continue _
@@ -102,7 +118,11 @@ let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Pa
       | Parser_flow.Ast.Statement.DeclareModuleExports _
       | Parser_flow.Ast.Statement.DeclareExportDeclaration _
       | Parser_flow.Ast.Statement.ExportDeclaration _
-      | Parser_flow.Ast.Statement.ImportDeclaration _ => placeholder
+      | Parser_flow.Ast.Statement.ImportDeclaration _ =>
+        switch notTopLevelInnerMostExpr {
+        | None => Exp.constant (Const_string "statementBail" None)
+        | Some expr => Exp.sequence (Exp.constant (Const_string "statementBail" None)) expr
+        }
       }
     )
   )
@@ -158,35 +178,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
               let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper;
               List.fold_left
                 (
-                  fun accumExp (_, statement) =>
-                    switch statement {
-                    | Statement.VariableDeclaration {
-                        Statement.VariableDeclaration.declarations: declarations,
-                        kind
-                      } =>
-                      /* TODO: multiple declarations */
-                      ignore kind;
-                      let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
-                      let name =
-                        switch id {
-                        | Pattern.Identifier (_, {Identifier.name: name, _}) => name
-                        | _ => "okCantDes"
-                        };
-                      let expr =
-                        switch init {
-                        | None => Exp.construct (astHelperLid (Lident "None")) None
-                        | Some e => expressionMapper e
-                        };
-                      Exp.let_
-                        Nonrecursive
-                        [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
-                        accumExp
-                    | Statement.Expression {
-                        Statement.Expression.expression: (_, expression) as expressionWrap
-                      } =>
-                      Exp.sequence (expressionMapper expressionWrap) accumExp
-                    | _ => Exp.constant (Const_string "bail" None)
-                    }
+                  fun accumExp statement =>
+                    genericStatementMapper notTopLevelInnerMostExpr::accumExp statement
                 )
                 lastItemReason
                 (List.tl bodyNotEmptyFlipped)
@@ -210,16 +203,6 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           Exp.fun_ "" None (Pat.construct (astHelperLid (Lident "()")) None) partialOrFullResult
         | oneParamOrMore => partialOrFullResult
         }
-      | Parser_flow.Ast.Expression.This
-      | Parser_flow.Ast.Expression.Array _
-      | Parser_flow.Ast.Expression.Sequence _
-      | Parser_flow.Ast.Expression.Unary _
-      | Parser_flow.Ast.Expression.Binary _
-      | Parser_flow.Ast.Expression.Assignment _
-      | Parser_flow.Ast.Expression.Update _
-      | Parser_flow.Ast.Expression.Logical _
-      | Parser_flow.Ast.Expression.Conditional _
-      | Parser_flow.Ast.Expression.New _ => placeholder
       | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         switch (callee, arguments) {
         | (
@@ -296,11 +279,6 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
         Exp.ident (astHelperLid (Lident name))
-      | Parser_flow.Ast.Expression.Member _
-      | Parser_flow.Ast.Expression.Yield _
-      | Parser_flow.Ast.Expression.Comprehension _
-      | Parser_flow.Ast.Expression.Generator _
-      | Parser_flow.Ast.Expression.Let _ => placeholder
       | Parser_flow.Ast.Expression.Literal {Literal.value: value, raw} =>
         switch value {
         | Literal.String s => Exp.constant (Const_string s None)
@@ -318,14 +296,30 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           } else {
             Exp.constant (Const_float (string_of_float n))
           }
-        | Literal.RegExp _ => placeholder
+        | Literal.RegExp _ => Exp.constant (Const_string "regexPlaceholder" None)
         }
+      | Parser_flow.Ast.Expression.This
+      | Parser_flow.Ast.Expression.Array _
+      | Parser_flow.Ast.Expression.Sequence _
+      | Parser_flow.Ast.Expression.Unary _
+      | Parser_flow.Ast.Expression.Binary _
+      | Parser_flow.Ast.Expression.Assignment _
+      | Parser_flow.Ast.Expression.Update _
+      | Parser_flow.Ast.Expression.Logical _
+      | Parser_flow.Ast.Expression.Conditional _
+      | Parser_flow.Ast.Expression.New _
+      | Parser_flow.Ast.Expression.Member _
+      | Parser_flow.Ast.Expression.Yield _
+      | Parser_flow.Ast.Expression.Comprehension _
+      | Parser_flow.Ast.Expression.Generator _
+      | Parser_flow.Ast.Expression.Let _
       | Parser_flow.Ast.Expression.JSXElement _
       | Parser_flow.Ast.Expression.TemplateLiteral _
       | Parser_flow.Ast.Expression.TaggedTemplate _
       | Parser_flow.Ast.Expression.Class _
       | Parser_flow.Ast.Expression.TypeCast _
-      | Parser_flow.Ast.Expression.MetaProperty _ => placeholder
+      | Parser_flow.Ast.Expression.MetaProperty _ =>
+        Exp.constant (Const_string "expressionPlaceholder" None)
       }
     )
   );
@@ -335,27 +329,6 @@ let statementsMapper statementWrap =>
   | (_, statement) =>
     Parser_flow.Ast.Statement.(
       switch statement {
-      | Parser_flow.Ast.Statement.Empty
-      | Parser_flow.Ast.Statement.Block _
-      | Parser_flow.Ast.Statement.Expression _
-      | Parser_flow.Ast.Statement.If _
-      | Parser_flow.Ast.Statement.Labeled _
-      | Parser_flow.Ast.Statement.Break _
-      | Parser_flow.Ast.Statement.Continue _
-      | Parser_flow.Ast.Statement.With _
-      | Parser_flow.Ast.Statement.TypeAlias _
-      | Parser_flow.Ast.Statement.Switch _
-      | Parser_flow.Ast.Statement.Return _
-      | Parser_flow.Ast.Statement.Throw _
-      | Parser_flow.Ast.Statement.Try _
-      | Parser_flow.Ast.Statement.While _
-      | Parser_flow.Ast.Statement.DoWhile _
-      | Parser_flow.Ast.Statement.For _
-      | Parser_flow.Ast.Statement.ForIn _
-      | Parser_flow.Ast.Statement.ForOf _
-      | Parser_flow.Ast.Statement.Let _
-      | Parser_flow.Ast.Statement.Debugger
-      | Parser_flow.Ast.Statement.FunctionDeclaration _ => defaultStructures
       | Parser_flow.Ast.Statement.VariableDeclaration {
           VariableDeclaration.kind: kind,
           declarations
@@ -394,6 +367,27 @@ let statementsMapper statementWrap =>
             }
           )
         )
+      | Parser_flow.Ast.Statement.Empty
+      | Parser_flow.Ast.Statement.Block _
+      | Parser_flow.Ast.Statement.Expression _
+      | Parser_flow.Ast.Statement.If _
+      | Parser_flow.Ast.Statement.Labeled _
+      | Parser_flow.Ast.Statement.Break _
+      | Parser_flow.Ast.Statement.Continue _
+      | Parser_flow.Ast.Statement.With _
+      | Parser_flow.Ast.Statement.TypeAlias _
+      | Parser_flow.Ast.Statement.Switch _
+      | Parser_flow.Ast.Statement.Return _
+      | Parser_flow.Ast.Statement.Throw _
+      | Parser_flow.Ast.Statement.Try _
+      | Parser_flow.Ast.Statement.While _
+      | Parser_flow.Ast.Statement.DoWhile _
+      | Parser_flow.Ast.Statement.For _
+      | Parser_flow.Ast.Statement.ForIn _
+      | Parser_flow.Ast.Statement.ForOf _
+      | Parser_flow.Ast.Statement.Let _
+      | Parser_flow.Ast.Statement.Debugger
+      | Parser_flow.Ast.Statement.FunctionDeclaration _
       | Parser_flow.Ast.Statement.ClassDeclaration _
       | Parser_flow.Ast.Statement.InterfaceDeclaration _
       | Parser_flow.Ast.Statement.DeclareVariable _
@@ -403,7 +397,20 @@ let statementsMapper statementWrap =>
       | Parser_flow.Ast.Statement.DeclareModuleExports _
       | Parser_flow.Ast.Statement.DeclareExportDeclaration _
       | Parser_flow.Ast.Statement.ExportDeclaration _
-      | Parser_flow.Ast.Statement.ImportDeclaration _ => defaultStructures
+      | Parser_flow.Ast.Statement.ImportDeclaration _ => [
+          Str.mk (
+            Pstr_value
+              Nonrecursive
+              [
+                {
+                  pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar2"},
+                  pvb_expr: expUnit,
+                  pvb_attributes: [],
+                  pvb_loc: default_loc.contents
+                }
+              ]
+          )
+        ]
       }
     )
   };

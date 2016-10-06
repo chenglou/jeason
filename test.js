@@ -14,6 +14,10 @@ function asd() {
 let arrow = (b) => 2;
 let arrow = () => 2;
 
+if (a) {
+  b
+}
+
 let a1 = React.createClass({});
 
 let a2 = React.createClass({
@@ -43,8 +47,12 @@ let a2 = React.createClass({
   },
   handleClick2: (e) => {
     this.props.handleClick();
+    this.props.handleClick2();
   },
   render: function() {
+    if (a) {
+      b
+    }
     return 1
   }
 });

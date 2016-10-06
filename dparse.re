@@ -3,6 +3,8 @@ let aTop = Js.Null.empty;
 
 let bTop = 6.5;
 
+if a {b};
+
 {
   val asd = "asd";
   val propInit = fun () => 1;
@@ -13,6 +15,7 @@ let bTop = 6.5;
     oneCall3 ();
     let bInner = 6;
     let cInner = 7;
+    if cond {b};
     (foo.bar ()).oneCall4 ()
   };
   method haha2 foo bar => 1;
