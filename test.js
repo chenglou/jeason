@@ -1,5 +1,10 @@
 let asd = 1
 
+let foo = {
+  a: 1,
+  b: 2,
+};
+
 let a1 = React.createClass({});
 
 let a2 = React.createClass({
@@ -13,8 +18,8 @@ let a2 = React.createClass({
     let nothing;
     let a = "hello world";
     let b = 6;
-    foo();
-    bar();
+    foo(a);
+    (a.baz ()).bar(a, b);
     var c = 7;
     const d = 8;
     return b;

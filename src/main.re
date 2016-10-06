@@ -41,9 +41,39 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
-      | Parser_flow.Ast.Expression.This => placeholder
-      | Parser_flow.Ast.Expression.Array _ => placeholder
-      | Parser_flow.Ast.Expression.Object _ => placeholder
+      | Parser_flow.Ast.Expression.Object {Object.properties: properties} =>
+        Exp.extension (
+          {loc: default_loc.contents, txt: "bs.obj"},
+          PStr [
+            Str.eval (
+              Exp.record
+                (
+                  properties |>
+                  List.map (
+                    fun property =>
+                      switch property {
+                      | Object.Property (_, {Object.Property.key: key, value, kind, _method, _}) =>
+                        ignore kind;
+                        ignore _method;
+                        let keyReason =
+                          switch key {
+                          | Object.Property.Identifier (_, {Identifier.name: name, _}) =>
+                            Lident name
+                          | Object.Property.Literal _
+                          | Object.Property.Computed _ => Lident "notThereYet"
+                          };
+                        (astHelperLid keyReason, expressionMapper value)
+                      | Object.SpreadProperty _ => (
+                          astHelperLid (Lident "objectSpreadNotImplementedYet"),
+                          Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
+                        )
+                      }
+                  )
+                )
+                None
+            )
+          ]
+        )
       | Parser_flow.Ast.Expression.ArrowFunction {Function.params: (params, restParam), body, _}
       | Parser_flow.Ast.Expression.Function {Function.params: (params, restParam), body, _} =>
         ignore restParam;
@@ -80,7 +110,38 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                       expUnit
                   | _ => Exp.constant (Const_string "ehOk" None)
                   }
-                | _ => Exp.constant (Const_string "noBodyItemOk2" None)
+                | Statement.Expression {Statement.Expression.expression: expression} =>
+                  expressionMapper expression
+                | Statement.Empty
+                | Statement.Block _
+                | Statement.If _
+                | Statement.Labeled _
+                | Statement.Break _
+                | Statement.Continue _
+                | Statement.With _
+                | Statement.TypeAlias _
+                | Statement.Switch _
+                | Statement.Return _
+                | Statement.Throw _
+                | Statement.Try _
+                | Statement.While _
+                | Statement.DoWhile _
+                | Statement.For _
+                | Statement.ForIn _
+                | Statement.ForOf _
+                | Statement.Let _
+                | Statement.Debugger
+                | Statement.FunctionDeclaration _
+                | Statement.ClassDeclaration _
+                | Statement.InterfaceDeclaration _
+                | Statement.DeclareVariable _
+                | Statement.DeclareFunction _
+                | Statement.DeclareClass _
+                | Statement.DeclareModule _
+                | Statement.DeclareModuleExports _
+                | Statement.DeclareExportDeclaration _
+                | Statement.ExportDeclaration _
+                | Statement.ImportDeclaration _ => Exp.constant (Const_string "noBodyItemOk2" None)
                 };
               List.fold_left
                 (
@@ -130,15 +191,17 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
           )
           bodyReason
           params
-      | Parser_flow.Ast.Expression.Sequence _ => placeholder
-      | Parser_flow.Ast.Expression.Unary _ => placeholder
-      | Parser_flow.Ast.Expression.Binary _ => placeholder
-      | Parser_flow.Ast.Expression.Assignment _ => placeholder
-      | Parser_flow.Ast.Expression.Update _ => placeholder
-      | Parser_flow.Ast.Expression.Logical _ => placeholder
-      | Parser_flow.Ast.Expression.Conditional _ => placeholder
+      | Parser_flow.Ast.Expression.This
+      | Parser_flow.Ast.Expression.Array _
+      | Parser_flow.Ast.Expression.Sequence _
+      | Parser_flow.Ast.Expression.Unary _
+      | Parser_flow.Ast.Expression.Binary _
+      | Parser_flow.Ast.Expression.Assignment _
+      | Parser_flow.Ast.Expression.Update _
+      | Parser_flow.Ast.Expression.Logical _
+      | Parser_flow.Ast.Expression.Conditional _
       | Parser_flow.Ast.Expression.New _ => placeholder
-      | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee), arguments} =>
+      | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         switch (callee, arguments) {
         | (
             Member {
@@ -195,14 +258,30 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
           Exp.apply
             (Exp.ident {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "createClass"})
             [("", createClassObj)]
-        | _ => placeholder
+        | (_, arguments) =>
+          Exp.apply
+            (expressionMapper calleeWrap)
+            (
+              arguments |>
+              List.map (
+                fun argument =>
+                  switch argument {
+                  | Expression e => ("", expressionMapper e)
+                  | Spread (_, _) => (
+                      "",
+                      Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+                    )
+                  }
+              )
+            )
         }
-      | Parser_flow.Ast.Expression.Member _ => placeholder
-      | Parser_flow.Ast.Expression.Yield _ => placeholder
-      | Parser_flow.Ast.Expression.Comprehension _ => placeholder
-      | Parser_flow.Ast.Expression.Generator _ => placeholder
+      | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
+        Exp.ident (astHelperLid (Lident name))
+      | Parser_flow.Ast.Expression.Member _
+      | Parser_flow.Ast.Expression.Yield _
+      | Parser_flow.Ast.Expression.Comprehension _
+      | Parser_flow.Ast.Expression.Generator _
       | Parser_flow.Ast.Expression.Let _ => placeholder
-      | Parser_flow.Ast.Expression.Identifier _ => placeholder
       | Parser_flow.Ast.Expression.Literal {Literal.value: value, raw} =>
         switch value {
         | Literal.String s => Exp.constant (Const_string s None)
@@ -222,11 +301,11 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
           }
         | Literal.RegExp _ => placeholder
         }
-      | Parser_flow.Ast.Expression.TemplateLiteral _ => placeholder
-      | Parser_flow.Ast.Expression.TaggedTemplate _ => placeholder
-      | Parser_flow.Ast.Expression.JSXElement _ => placeholder
-      | Parser_flow.Ast.Expression.Class _ => placeholder
-      | Parser_flow.Ast.Expression.TypeCast _ => placeholder
+      | Parser_flow.Ast.Expression.JSXElement _
+      | Parser_flow.Ast.Expression.TemplateLiteral _
+      | Parser_flow.Ast.Expression.TaggedTemplate _
+      | Parser_flow.Ast.Expression.Class _
+      | Parser_flow.Ast.Expression.TypeCast _
       | Parser_flow.Ast.Expression.MetaProperty _ => placeholder
       }
     )
@@ -237,26 +316,26 @@ let statementsMapper statementWrap =>
   | (_, statement) =>
     Parser_flow.Ast.Statement.(
       switch statement {
-      | Parser_flow.Ast.Statement.Empty => defaultStructures
-      | Parser_flow.Ast.Statement.Block _ => defaultStructures
-      | Parser_flow.Ast.Statement.Expression _ => defaultStructures
-      | Parser_flow.Ast.Statement.If _ => defaultStructures
-      | Parser_flow.Ast.Statement.Labeled _ => defaultStructures
-      | Parser_flow.Ast.Statement.Break _ => defaultStructures
-      | Parser_flow.Ast.Statement.Continue _ => defaultStructures
-      | Parser_flow.Ast.Statement.With _ => defaultStructures
-      | Parser_flow.Ast.Statement.TypeAlias _ => defaultStructures
-      | Parser_flow.Ast.Statement.Switch _ => defaultStructures
-      | Parser_flow.Ast.Statement.Return _ => defaultStructures
-      | Parser_flow.Ast.Statement.Throw _ => defaultStructures
-      | Parser_flow.Ast.Statement.Try _ => defaultStructures
-      | Parser_flow.Ast.Statement.While _ => defaultStructures
-      | Parser_flow.Ast.Statement.DoWhile _ => defaultStructures
-      | Parser_flow.Ast.Statement.For _ => defaultStructures
-      | Parser_flow.Ast.Statement.ForIn _ => defaultStructures
-      | Parser_flow.Ast.Statement.ForOf _ => defaultStructures
-      | Parser_flow.Ast.Statement.Let _ => defaultStructures
-      | Parser_flow.Ast.Statement.Debugger => defaultStructures
+      | Parser_flow.Ast.Statement.Empty
+      | Parser_flow.Ast.Statement.Block _
+      | Parser_flow.Ast.Statement.Expression _
+      | Parser_flow.Ast.Statement.If _
+      | Parser_flow.Ast.Statement.Labeled _
+      | Parser_flow.Ast.Statement.Break _
+      | Parser_flow.Ast.Statement.Continue _
+      | Parser_flow.Ast.Statement.With _
+      | Parser_flow.Ast.Statement.TypeAlias _
+      | Parser_flow.Ast.Statement.Switch _
+      | Parser_flow.Ast.Statement.Return _
+      | Parser_flow.Ast.Statement.Throw _
+      | Parser_flow.Ast.Statement.Try _
+      | Parser_flow.Ast.Statement.While _
+      | Parser_flow.Ast.Statement.DoWhile _
+      | Parser_flow.Ast.Statement.For _
+      | Parser_flow.Ast.Statement.ForIn _
+      | Parser_flow.Ast.Statement.ForOf _
+      | Parser_flow.Ast.Statement.Let _
+      | Parser_flow.Ast.Statement.Debugger
       | Parser_flow.Ast.Statement.FunctionDeclaration _ => defaultStructures
       | Parser_flow.Ast.Statement.VariableDeclaration {
           VariableDeclaration.kind: kind,
@@ -298,15 +377,15 @@ let statementsMapper statementWrap =>
             }
           )
         )
-      | Parser_flow.Ast.Statement.ClassDeclaration _ => defaultStructures
-      | Parser_flow.Ast.Statement.InterfaceDeclaration _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareVariable _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareFunction _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareClass _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareModule _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareModuleExports _ => defaultStructures
-      | Parser_flow.Ast.Statement.DeclareExportDeclaration _ => defaultStructures
-      | Parser_flow.Ast.Statement.ExportDeclaration _ => defaultStructures
+      | Parser_flow.Ast.Statement.ClassDeclaration _
+      | Parser_flow.Ast.Statement.InterfaceDeclaration _
+      | Parser_flow.Ast.Statement.DeclareVariable _
+      | Parser_flow.Ast.Statement.DeclareFunction _
+      | Parser_flow.Ast.Statement.DeclareClass _
+      | Parser_flow.Ast.Statement.DeclareModule _
+      | Parser_flow.Ast.Statement.DeclareModuleExports _
+      | Parser_flow.Ast.Statement.DeclareExportDeclaration _
+      | Parser_flow.Ast.Statement.ExportDeclaration _
       | Parser_flow.Ast.Statement.ImportDeclaration _ => defaultStructures
       }
     )
