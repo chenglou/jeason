@@ -7,6 +7,10 @@ open Parsetree;
 
 open Longident;
 
+let expUnit = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
+
+let placeholder = Exp.constant (Const_string "placeholder" None);
+
 let defaultStructures = [
   Str.mk (
     Pstr_value
@@ -14,25 +18,13 @@ let defaultStructures = [
       [
         {
           pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar2"},
-          pvb_expr: Exp.construct {loc: default_loc.contents, txt: Lident "()"} None,
+          pvb_expr: expUnit,
           pvb_attributes: [],
           pvb_loc: default_loc.contents
         }
       ]
   )
 ];
-
-let expressionMapperOld (expression: Parser_flow.Ast.Expression.t) :list Parsetree.structure_item => {
-  ignore expression;
-  /* Exp.construct {loc: default_loc.contents, txt: Lident "()"} None */
-  defaultStructures
-};
-
-let patternMapper (pattern: Parser_flow.Ast.Pattern.t) :list Parsetree.structure_item => {
-  ignore pattern;
-  /* Pat.var {loc: default_loc.contents, txt: "myVar"} */
-  defaultStructures
-};
 
 let astHelperStr a => {loc: default_loc.contents, txt: a};
 
@@ -45,14 +37,13 @@ let parseTreeValueBinding pat::pat expr::expr => {
   pvb_loc: default_loc.contents
 };
 
-let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression => {
-  let defaultExpression = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
+let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
-      | Parser_flow.Ast.Expression.This => defaultExpression
-      | Parser_flow.Ast.Expression.Array _ => defaultExpression
-      | Parser_flow.Ast.Expression.Object _ => defaultExpression
+      | Parser_flow.Ast.Expression.This => placeholder
+      | Parser_flow.Ast.Expression.Array _ => placeholder
+      | Parser_flow.Ast.Expression.Object _ => placeholder
       | Parser_flow.Ast.Expression.ArrowFunction {Function.params: (params, restParam), body, _}
       | Parser_flow.Ast.Expression.Function {Function.params: (params, restParam), body, _} =>
         ignore restParam;
@@ -78,7 +69,7 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                   let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
                   let expr =
                     switch init {
-                    | None => Exp.construct {loc: default_loc.contents, txt: Lident "()"} None
+                    | None => expUnit
                     | Some e => expressionMapper e
                     };
                   switch id {
@@ -86,10 +77,10 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                     Exp.let_
                       Nonrecursive
                       [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
-                      (Exp.construct {loc: default_loc.contents, txt: Lident "()"} None)
+                      expUnit
                   | _ => Exp.constant (Const_string "ehOk" None)
                   }
-                | _ => Exp.constant (Const_string "noBodyItemOk" None)
+                | _ => Exp.constant (Const_string "noBodyItemOk2" None)
                 };
               List.fold_left
                 (
@@ -109,7 +100,7 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                         };
                       let expr =
                         switch init {
-                        | None => Exp.construct {loc: default_loc.contents, txt: Lident "()"} None
+                        | None => expUnit
                         | Some e => expressionMapper e
                         };
                       Exp.let_
@@ -126,7 +117,7 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                 lastItemReason
                 (List.tl bodyNotEmptyFlipped)
             }
-          | Function.BodyExpression _ => raise Not_found
+          | Function.BodyExpression _ => Exp.constant (Const_string "noBodyItemOk3" None)
           };
         List.fold_left
           (
@@ -139,14 +130,14 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
           )
           bodyReason
           params
-      | Parser_flow.Ast.Expression.Sequence _ => defaultExpression
-      | Parser_flow.Ast.Expression.Unary _ => defaultExpression
-      | Parser_flow.Ast.Expression.Binary _ => defaultExpression
-      | Parser_flow.Ast.Expression.Assignment _ => defaultExpression
-      | Parser_flow.Ast.Expression.Update _ => defaultExpression
-      | Parser_flow.Ast.Expression.Logical _ => defaultExpression
-      | Parser_flow.Ast.Expression.Conditional _ => defaultExpression
-      | Parser_flow.Ast.Expression.New _ => defaultExpression
+      | Parser_flow.Ast.Expression.Sequence _ => placeholder
+      | Parser_flow.Ast.Expression.Unary _ => placeholder
+      | Parser_flow.Ast.Expression.Binary _ => placeholder
+      | Parser_flow.Ast.Expression.Assignment _ => placeholder
+      | Parser_flow.Ast.Expression.Update _ => placeholder
+      | Parser_flow.Ast.Expression.Logical _ => placeholder
+      | Parser_flow.Ast.Expression.Conditional _ => placeholder
+      | Parser_flow.Ast.Expression.New _ => placeholder
       | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee), arguments} =>
         switch (callee, arguments) {
         | (
@@ -204,25 +195,42 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
           Exp.apply
             (Exp.ident {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "createClass"})
             [("", createClassObj)]
-        | _ => defaultExpression
+        | _ => placeholder
         }
-      | Parser_flow.Ast.Expression.Member _ => defaultExpression
-      | Parser_flow.Ast.Expression.Yield _ => defaultExpression
-      | Parser_flow.Ast.Expression.Comprehension _ => defaultExpression
-      | Parser_flow.Ast.Expression.Generator _ => defaultExpression
-      | Parser_flow.Ast.Expression.Let _ => defaultExpression
-      | Parser_flow.Ast.Expression.Identifier _ => defaultExpression
-      | Parser_flow.Ast.Expression.Literal _ => defaultExpression
-      | Parser_flow.Ast.Expression.TemplateLiteral _ => defaultExpression
-      | Parser_flow.Ast.Expression.TaggedTemplate _ => defaultExpression
-      | Parser_flow.Ast.Expression.JSXElement _ => defaultExpression
-      | Parser_flow.Ast.Expression.Class _ => defaultExpression
-      | Parser_flow.Ast.Expression.TypeCast _ => defaultExpression
-      | Parser_flow.Ast.Expression.MetaProperty _ => defaultExpression
+      | Parser_flow.Ast.Expression.Member _ => placeholder
+      | Parser_flow.Ast.Expression.Yield _ => placeholder
+      | Parser_flow.Ast.Expression.Comprehension _ => placeholder
+      | Parser_flow.Ast.Expression.Generator _ => placeholder
+      | Parser_flow.Ast.Expression.Let _ => placeholder
+      | Parser_flow.Ast.Expression.Identifier _ => placeholder
+      | Parser_flow.Ast.Expression.Literal {Literal.value: value, raw} =>
+        switch value {
+        | Literal.String s => Exp.constant (Const_string s None)
+        | Literal.Boolean boolean =>
+          /* translate boolean into BuckleScript true/false. We can't translate to ocaml true/false bc these
+             will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
+             numbers thinking you're holding true/false */
+          /* boolean ? Exp. */
+          Exp.ident (astHelperLid (Lident (boolean ? "Js.true_" : "Js.false")))
+        | Literal.Null => Exp.ident (astHelperLid (Lident "Js.Null.Empty"))
+        | Literal.Number n =>
+          let intN = int_of_float n;
+          if (float_of_int intN == n) {
+            Exp.constant (Const_int intN)
+          } else {
+            Exp.constant (Const_float (string_of_float n))
+          }
+        | Literal.RegExp _ => placeholder
+        }
+      | Parser_flow.Ast.Expression.TemplateLiteral _ => placeholder
+      | Parser_flow.Ast.Expression.TaggedTemplate _ => placeholder
+      | Parser_flow.Ast.Expression.JSXElement _ => placeholder
+      | Parser_flow.Ast.Expression.Class _ => placeholder
+      | Parser_flow.Ast.Expression.TypeCast _ => placeholder
+      | Parser_flow.Ast.Expression.MetaProperty _ => placeholder
       }
     )
-  )
-};
+  );
 
 let statementsMapper statementWrap =>
   switch statementWrap {
@@ -254,46 +262,42 @@ let statementsMapper statementWrap =>
           VariableDeclaration.kind: kind,
           declarations
         } =>
-        switch kind {
-        | VariableDeclaration.Let =>
-          Parser_flow.Ast.Statement.VariableDeclaration.Declarator.(
-            declarations |>
-            List.map (
-              fun (_, t) => {
-                let initialValue: Parsetree.expression =
-                  switch t.init {
-                  /* TODO: turn into option? */
-                  | None => Exp.construct {loc: default_loc.contents, txt: Lident "()"} None
-                  | Some expr => expressionMapper expr
-                  };
-                Str.value
-                  Nonrecursive
-                  [
-                    switch t.id {
-                    | (_, Parser_flow.Ast.Pattern.Identifier x) =>
-                      let (_, x) = x;
-                      {
-                        pvb_pat: Pat.var {
-                          loc: default_loc.contents,
-                          txt: Parser_flow.Ast.Identifier.(x.name)
-                        },
-                        pvb_expr: initialValue,
-                        pvb_attributes: [],
-                        pvb_loc: default_loc.contents
-                      }
-                    | _ => {
-                        pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
-                        pvb_expr: initialValue,
-                        pvb_attributes: [],
-                        pvb_loc: default_loc.contents
-                      }
+        Parser_flow.Ast.Statement.VariableDeclaration.Declarator.(
+          declarations |>
+          List.map (
+            fun (_, t) => {
+              let initialValue: Parsetree.expression =
+                switch t.init {
+                /* TODO: turn into option? */
+                | None => placeholder
+                | Some expr => expressionMapper expr
+                };
+              Str.value
+                Nonrecursive
+                [
+                  switch t.id {
+                  | (_, Parser_flow.Ast.Pattern.Identifier x) =>
+                    let (_, x) = x;
+                    {
+                      pvb_pat: Pat.var {
+                        loc: default_loc.contents,
+                        txt: Parser_flow.Ast.Identifier.(x.name)
+                      },
+                      pvb_expr: initialValue,
+                      pvb_attributes: [],
+                      pvb_loc: default_loc.contents
                     }
-                  ]
-              }
-            )
+                  | _ => {
+                      pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
+                      pvb_expr: initialValue,
+                      pvb_attributes: [],
+                      pvb_loc: default_loc.contents
+                    }
+                  }
+                ]
+            }
           )
-        | _ => defaultStructures
-        }
+        )
       | Parser_flow.Ast.Statement.ClassDeclaration _ => defaultStructures
       | Parser_flow.Ast.Statement.InterfaceDeclaration _ => defaultStructures
       | Parser_flow.Ast.Statement.DeclareVariable _ => defaultStructures

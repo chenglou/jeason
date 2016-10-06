@@ -1,6 +1,6 @@
-let aTop = 5;
+let aTop = Js.Null.empty;
 
-let bTop = 6;
+let bTop = 6.5;
 
 {
   val asd = "asd";
@@ -11,7 +11,7 @@ let bTop = 6;
     oneCall3 ();
     let bInner = 6;
     let cInner = 7;
-    oneCall4 ();
+    oneCall4 ()
   };
   method haha2 foo bar => 1;
   method haha3 () => 1

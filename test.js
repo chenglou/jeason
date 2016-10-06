@@ -3,16 +3,20 @@ let asd = 1
 let a1 = React.createClass({});
 
 let a2 = React.createClass({
-  foo: 1,
+  foo: 1.5,
   getInitialState() {
     return {a: 1};
   },
+  getInitialState2() {},
+  getInitialState3 = () => 1,
   shouldComponentUpdate: function(nextProps, nextState) {
-    var a = 5;
-    var b = 6;
+    let nothing;
+    let a = "hello world";
+    let b = 6;
     foo();
     bar();
     var c = 7;
+    const d = 8;
     return b;
   },
   handleClick: (e) => {
