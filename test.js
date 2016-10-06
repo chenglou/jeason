@@ -1,9 +1,17 @@
-let asd = 1
+let asd = 1;
+let asd2;
 
 let foo = {
   a: 1,
   b: 2,
 };
+
+function asd() {
+  return 1;
+}
+
+let arrow = (b) => 2;
+let arrow = () => 2;
 
 let a1 = React.createClass({});
 
@@ -12,8 +20,12 @@ let a2 = React.createClass({
   getInitialState() {
     return {a: 1};
   },
-  getInitialState2() {},
-  getInitialState3 = () => 1,
+  getInitialState2: function() {
+    return {a: 1};
+  },
+  getInitialState3() {},
+  getInitialState4 = (a, b) => 1,
+  getInitialState5 = () => 2,
   shouldComponentUpdate: function(nextProps, nextState) {
     let nothing;
     let a = "hello world";

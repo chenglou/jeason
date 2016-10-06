@@ -5,6 +5,7 @@ let bTop = 6.5;
 
 {
   val asd = "asd";
+  val propInit = fun () => 1;
   method haha foo => {
     oneCall1 ();
     oneCall2 ();

@@ -37,6 +37,42 @@ let parseTreeValueBinding pat::pat expr::expr => {
   pvb_loc: default_loc.contents
 };
 
+let rec genericStatementMapper ((_, statement): Parser_flow.Ast.Statement.t) :Parsetree.expression =>
+  switch statement {
+  | Parser_flow.Ast.Statement.Empty
+  | Parser_flow.Ast.Statement.Block _
+  | Parser_flow.Ast.Statement.Expression _
+  | Parser_flow.Ast.Statement.If _
+  | Parser_flow.Ast.Statement.Labeled _
+  | Parser_flow.Ast.Statement.Break _
+  | Parser_flow.Ast.Statement.Continue _
+  | Parser_flow.Ast.Statement.With _
+  | Parser_flow.Ast.Statement.TypeAlias _
+  | Parser_flow.Ast.Statement.Switch _
+  | Parser_flow.Ast.Statement.Return _
+  | Parser_flow.Ast.Statement.Throw _
+  | Parser_flow.Ast.Statement.Try _
+  | Parser_flow.Ast.Statement.While _
+  | Parser_flow.Ast.Statement.DoWhile _
+  | Parser_flow.Ast.Statement.For _
+  | Parser_flow.Ast.Statement.ForIn _
+  | Parser_flow.Ast.Statement.ForOf _
+  | Parser_flow.Ast.Statement.Let _
+  | Parser_flow.Ast.Statement.Debugger
+  | Parser_flow.Ast.Statement.FunctionDeclaration _
+  | Parser_flow.Ast.Statement.VariableDeclaration _
+  | Parser_flow.Ast.Statement.ClassDeclaration _
+  | Parser_flow.Ast.Statement.InterfaceDeclaration _
+  | Parser_flow.Ast.Statement.DeclareVariable _
+  | Parser_flow.Ast.Statement.DeclareFunction _
+  | Parser_flow.Ast.Statement.DeclareClass _
+  | Parser_flow.Ast.Statement.DeclareModule _
+  | Parser_flow.Ast.Statement.DeclareModuleExports _
+  | Parser_flow.Ast.Statement.DeclareExportDeclaration _
+  | Parser_flow.Ast.Statement.ExportDeclaration _
+  | Parser_flow.Ast.Statement.ImportDeclaration _ => placeholder
+  };
+
 let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
@@ -80,6 +116,12 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
         ignore body;
         let bodyReason =
           switch body {
+          | Function.BodyExpression expression =>
+            Exp.fun_
+              ""
+              None
+              (Pat.construct (astHelperLid (Lident "()")) None)
+              (expressionMapper expression)
           | Function.BodyBlock (_, {Statement.Block.body: body}) =>
             switch body {
             | [] => Exp.constant (Const_string "noBodyItemOk" None)
@@ -161,7 +203,7 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                         };
                       let expr =
                         switch init {
-                        | None => expUnit
+                        | None => Exp.construct (astHelperLid (Lident "None")) None
                         | Some e => expressionMapper e
                         };
                       Exp.let_
@@ -178,8 +220,8 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
                 lastItemReason
                 (List.tl bodyNotEmptyFlipped)
             }
-          | Function.BodyExpression _ => Exp.constant (Const_string "noBodyItemOk3" None)
           };
+        List.rev params |>
         List.fold_left
           (
             fun expr' (_, param) =>
@@ -190,7 +232,6 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
               }
           )
           bodyReason
-          params
       | Parser_flow.Ast.Expression.This
       | Parser_flow.Ast.Expression.Array _
       | Parser_flow.Ast.Expression.Sequence _
@@ -347,31 +388,29 @@ let statementsMapper statementWrap =>
             fun (_, t) => {
               let initialValue: Parsetree.expression =
                 switch t.init {
-                /* TODO: turn into option? */
-                | None => placeholder
+                | None => Exp.construct (astHelperLid (Lident "None")) None
                 | Some expr => expressionMapper expr
                 };
               Str.value
                 Nonrecursive
                 [
                   switch t.id {
-                  | (_, Parser_flow.Ast.Pattern.Identifier x) =>
-                    let (_, x) = x;
-                    {
-                      pvb_pat: Pat.var {
-                        loc: default_loc.contents,
-                        txt: Parser_flow.Ast.Identifier.(x.name)
-                      },
-                      pvb_expr: initialValue,
-                      pvb_attributes: [],
-                      pvb_loc: default_loc.contents
-                    }
-                  | _ => {
-                      pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
-                      pvb_expr: initialValue,
-                      pvb_attributes: [],
-                      pvb_loc: default_loc.contents
-                    }
+                  | (
+                      _,
+                      Parser_flow.Ast.Pattern.Identifier (
+                        _,
+                        {Parser_flow.Ast.Identifier.name: name, _}
+                      )
+                    ) =>
+                    /* TODO: share some code with variable declaration translator above that outputs expressions */
+                    parseTreeValueBinding
+                      pat::(Pat.var {loc: default_loc.contents, txt: name}) expr::initialValue
+                  | (_, Parser_flow.Ast.Pattern.Object _)
+                  | (_, Parser_flow.Ast.Pattern.Array _)
+                  | (_, Parser_flow.Ast.Pattern.Assignment _)
+                  | (_, Parser_flow.Ast.Pattern.Expression _) =>
+                    parseTreeValueBinding
+                      pat::(Pat.var {loc: default_loc.contents, txt: "myVar"}) expr::initialValue
                   }
                 ]
             }
