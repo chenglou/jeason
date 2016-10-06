@@ -8,7 +8,12 @@ let a2 = React.createClass({
     return {a: 1};
   },
   shouldComponentUpdate: function(nextProps, nextState) {
-    return true;
+    var a = 5;
+    var b = 6;
+    foo();
+    bar();
+    var c = 7;
+    return b;
   },
   handleClick: (e) => {
     this.props.handleClick();

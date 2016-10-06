@@ -38,6 +38,13 @@ let astHelperStr a => {loc: default_loc.contents, txt: a};
 
 let astHelperLid (a: Longident.t) => {loc: default_loc.contents, txt: a};
 
+let parseTreeValueBinding pat::pat expr::expr => {
+  pvb_pat: pat,
+  pvb_expr: expr,
+  pvb_attributes: [],
+  pvb_loc: default_loc.contents
+};
+
 let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression => {
   let defaultExpression = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
   Parser_flow.Ast.(
@@ -46,27 +53,92 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
       | Parser_flow.Ast.Expression.This => defaultExpression
       | Parser_flow.Ast.Expression.Array _ => defaultExpression
       | Parser_flow.Ast.Expression.Object _ => defaultExpression
-      | Parser_flow.Ast.Expression.Function {
-          Function.params: (params, restParam),
-          body,
-          expression,
-          _
-        } =>
+      | Parser_flow.Ast.Expression.ArrowFunction {Function.params: (params, restParam), body, _}
+      | Parser_flow.Ast.Expression.Function {Function.params: (params, restParam), body, _} =>
         ignore restParam;
         ignore body;
-        ignore expression;
+        let bodyReason =
+          switch body {
+          | Function.BodyBlock (_, {Statement.Block.body: body}) =>
+            switch body {
+            | [] => Exp.constant (Const_string "noBodyItemOk" None)
+            | bodyNotEmpty =>
+              let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
+              let (_, lastItem) = List.hd bodyNotEmptyFlipped;
+              let lastItemReason: Parsetree.expression =
+                switch lastItem {
+                | Statement.VariableDeclaration {
+                    Statement.VariableDeclaration.declarations: declarations,
+                    kind
+                  } =>
+                  /* this is the part that transforms non-top-level var declarations list (in a single var
+                     declaration) from js to like, let with a tuple or something in reason */
+                  /* TODO: this lol */
+                  ignore kind;
+                  let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
+                  let expr =
+                    switch init {
+                    | None => Exp.construct {loc: default_loc.contents, txt: Lident "()"} None
+                    | Some e => expressionMapper e
+                    };
+                  switch id {
+                  | Pattern.Identifier (_, {Identifier.name: name, _}) =>
+                    Exp.let_
+                      Nonrecursive
+                      [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
+                      (Exp.construct {loc: default_loc.contents, txt: Lident "()"} None)
+                  | _ => Exp.constant (Const_string "ehOk" None)
+                  }
+                | _ => Exp.constant (Const_string "noBodyItemOk" None)
+                };
+              List.fold_left
+                (
+                  fun accumExp (_, statement) =>
+                    switch statement {
+                    | Statement.VariableDeclaration {
+                        Statement.VariableDeclaration.declarations: declarations,
+                        kind
+                      } =>
+                      /* TODO: multiple declarations */
+                      ignore kind;
+                      let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
+                      let name =
+                        switch id {
+                        | Pattern.Identifier (_, {Identifier.name: name, _}) => name
+                        | _ => "okCantDes"
+                        };
+                      let expr =
+                        switch init {
+                        | None => Exp.construct {loc: default_loc.contents, txt: Lident "()"} None
+                        | Some e => expressionMapper e
+                        };
+                      Exp.let_
+                        Nonrecursive
+                        [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
+                        accumExp
+                    | Statement.Expression {
+                        Statement.Expression.expression: (_, expression) as expressionWrap
+                      } =>
+                      Exp.sequence (expressionMapper expressionWrap) accumExp
+                    | _ => Exp.constant (Const_string "bail" None)
+                    }
+                )
+                lastItemReason
+                (List.tl bodyNotEmptyFlipped)
+            }
+          | Function.BodyExpression _ => raise Not_found
+          };
         List.fold_left
           (
             fun expr' (_, param) =>
               switch param {
-              | Pattern.Identifier _ {Identifier.name: name, _} [@implicit_arity] =>
+              | Pattern.Identifier (_, {Identifier.name: name, _}) =>
                 Exp.fun_ "" None (Pat.construct (astHelperLid (Lident name)) None) expr'
               | _ => Exp.fun_ "" None (Pat.var (astHelperStr "fixme")) expr'
               }
           )
-          (Exp.constant (Const_int 1))
+          bodyReason
           params
-      | Parser_flow.Ast.Expression.ArrowFunction _ => defaultExpression
       | Parser_flow.Ast.Expression.Sequence _ => defaultExpression
       | Parser_flow.Ast.Expression.Unary _ => defaultExpression
       | Parser_flow.Ast.Expression.Binary _ => defaultExpression
@@ -79,12 +151,11 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
         switch (callee, arguments) {
         | (
             Member {
-              Member._object: (_, Identifier _ {Identifier.name: "React", _} [@implicit_arity]),
-              property:
-                Member.PropertyIdentifier _ {Identifier.name: "createClass", _} [@implicit_arity],
+              Member._object: (_, Identifier (_, {Identifier.name: "React", _})),
+              property: Member.PropertyIdentifier (_, {Identifier.name: "createClass", _}),
               _
             },
-            [Expression _ (Object {Object.properties: properties}) [@implicit_arity]]
+            [Expression (_, Object {Object.properties: properties})]
           ) =>
           let createClassSpec =
             properties |>
@@ -92,16 +163,15 @@ let rec expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parset
               fun property =>
                 Object.(
                   switch property {
-                  | Property
-                      _
+                  | Property (
+                      _,
                       {
-                        Property.key:
-                          Property.Identifier _ {Identifier.name: name, _} [@implicit_arity],
+                        Property.key: Property.Identifier (_, {Identifier.name: name, _}),
                         value: (_, value) as valueWrap,
                         kind: Property.Init,
                         _
                       }
-                    [@implicit_arity] =>
+                    ) =>
                     switch value {
                     | Function _
                     | ArrowFunction _ =>
@@ -199,16 +269,19 @@ let statementsMapper statementWrap =>
                 Str.value
                   Nonrecursive
                   [
-                    switch (t.id){
-                      | (_, Parser_flow.Ast.Pattern.Identifier x) => {
-                        let (_, x) = x;
-                        {
-                        pvb_pat: Pat.var {loc: default_loc.contents, txt: Parser_flow.Ast.Identifier.(x.name)},
+                    switch t.id {
+                    | (_, Parser_flow.Ast.Pattern.Identifier x) =>
+                      let (_, x) = x;
+                      {
+                        pvb_pat: Pat.var {
+                          loc: default_loc.contents,
+                          txt: Parser_flow.Ast.Identifier.(x.name)
+                        },
                         pvb_expr: initialValue,
                         pvb_attributes: [],
                         pvb_loc: default_loc.contents
-                      }}
-                      | (_) => {
+                      }
+                    | _ => {
                         pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar"},
                         pvb_expr: initialValue,
                         pvb_attributes: [],
