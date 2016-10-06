@@ -3,7 +3,8 @@ let asd2;
 
 let foo = {
   a: 1,
-  b: 2,
+  b: () => 2,
+  c: (a, b) => 3,
 };
 
 function asd() {
@@ -37,6 +38,10 @@ let a2 = React.createClass({
     return b;
   },
   handleClick: (e) => {
+    return 1;
+    this.props.handleClick();
+  },
+  handleClick2: (e) => {
     this.props.handleClick();
   },
   render: function() {
