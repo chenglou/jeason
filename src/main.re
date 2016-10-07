@@ -298,7 +298,19 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           }
         | Literal.RegExp _ => Exp.constant (Const_string "regexPlaceholder" None)
         }
-      | Parser_flow.Ast.Expression.This
+      | Parser_flow.Ast.Expression.Member {Member._object: _object, property, _} =>
+        /* compile js dot access into ##, which BuckleScript will pick up and compile (back) into dot. Will we
+           reach a fixed point lol? */
+        let propertyReason =
+          switch property {
+          | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
+            Exp.ident (astHelperLid (Lident name))
+          | Member.PropertyExpression expr => expressionMapper expr
+          };
+        Exp.apply
+          (Exp.ident (astHelperLid (Lident "##")))
+          [("", expressionMapper _object), ("", propertyReason)]
+      | Parser_flow.Ast.Expression.This => Exp.ident (astHelperLid (Lident "this"))
       | Parser_flow.Ast.Expression.Array _
       | Parser_flow.Ast.Expression.Sequence _
       | Parser_flow.Ast.Expression.Unary _
@@ -308,7 +320,6 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
       | Parser_flow.Ast.Expression.Logical _
       | Parser_flow.Ast.Expression.Conditional _
       | Parser_flow.Ast.Expression.New _
-      | Parser_flow.Ast.Expression.Member _
       | Parser_flow.Ast.Expression.Yield _
       | Parser_flow.Ast.Expression.Comprehension _
       | Parser_flow.Ast.Expression.Generator _

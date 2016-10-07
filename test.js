@@ -46,7 +46,7 @@ let a2 = React.createClass({
     this.props.handleClick();
   },
   handleClick2: (e) => {
-    this.props.handleClick();
+    this.props.handleClick(this.foo);
     this.props.handleClick2();
   },
   render: function() {
