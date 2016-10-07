@@ -18,6 +18,9 @@ if (a) {
   b
 }
 
+bla();
+bla(a);
+
 let a1 = React.createClass({});
 
 let a2 = React.createClass({
@@ -35,6 +38,7 @@ let a2 = React.createClass({
     let nothing;
     let a = "hello world";
     let b = 6;
+    foo();
     foo(a);
     (a.baz ()).bar(a, b);
     var c = 7;

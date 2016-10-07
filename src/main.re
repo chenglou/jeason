@@ -261,21 +261,26 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
             (Exp.ident {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "createClass"})
             [("", createClassObj)]
         | (_, arguments) =>
-          Exp.apply
-            (expressionMapper calleeWrap)
-            (
-              arguments |>
-              List.map (
-                fun argument =>
-                  switch argument {
-                  | Expression e => ("", expressionMapper e)
-                  | Spread (_, _) => (
-                      "",
-                      Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
-                    )
-                  }
-              )
-            )
+          let argumentsReason =
+            arguments |>
+            List.map (
+              fun argument =>
+                switch argument {
+                | Expression e => ("", expressionMapper e)
+                | Spread (_, _) => (
+                    "",
+                    Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+                  )
+                }
+            );
+          /* see Expression.Function above: */
+          /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
+          let argumentsReason =
+            switch arguments {
+            | [] => [("", expUnit)]
+            | oneArgOrMore => argumentsReason
+            };
+          Exp.apply (expressionMapper calleeWrap) argumentsReason
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
         Exp.ident (astHelperLid (Lident name))
