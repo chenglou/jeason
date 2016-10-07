@@ -27,17 +27,14 @@ let rec statementBlockMapper
   | [] => expUnit
   | bodyNotEmpty =>
     let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
-    let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper;
+    let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper terminalExpr::None;
     List.fold_left
-      (
-        fun accumExp statement =>
-          genericStatementMapper notTopLevelInnerMostExpr::accumExp statement
-      )
+      (fun accumExp statement => genericStatementMapper terminalExpr::(Some accumExp) statement)
       lastItemReason
       (List.tl bodyNotEmptyFlipped)
   }
 and genericStatementMapper
-    notTopLevelInnerMostExpr::notTopLevelInnerMostExpr=?
+    terminalExpr::terminalExpr
     ((_, statement): Parser_flow.Ast.Statement.t)
     :Parsetree.expression =>
   Parser_flow.Ast.(
@@ -58,7 +55,7 @@ and genericStatementMapper
           | Some e => expressionMapper e
           };
         let innerMostExpr =
-          switch notTopLevelInnerMostExpr {
+          switch terminalExpr {
           | None => expUnit
           | Some expr => expr
           };
@@ -81,29 +78,27 @@ and genericStatementMapper
           | None => expUnit
           | Some expr => expressionMapper expr
           };
-        switch notTopLevelInnerMostExpr {
+        switch terminalExpr {
         | None => result
         | Some expr => Exp.sequence result expr
         }
       | Parser_flow.Ast.Statement.Expression {Expression.expression: expression} =>
-        let innerMostExpr =
-          switch notTopLevelInnerMostExpr {
-          | None => expUnit
-          | Some expr => expr
-          };
-        Exp.sequence (expressionMapper expression) innerMostExpr
+        switch terminalExpr {
+        | None => expressionMapper expression
+        | Some expr => Exp.sequence (expressionMapper expression) expr
+        }
       | Parser_flow.Ast.Statement.If {If.test: test, consequent, alternate} =>
         let result =
           Exp.ifthenelse
             (expressionMapper test)
-            (genericStatementMapper consequent)
+            (genericStatementMapper terminalExpr::None consequent)
             (
               switch alternate {
               | None => None
-              | Some statement => Some (genericStatementMapper statement)
+              | Some statement => Some (genericStatementMapper terminalExpr::None statement)
               }
             );
-        switch notTopLevelInnerMostExpr {
+        switch terminalExpr {
         | None => result
         | Some expr => Exp.sequence result expr
         }
@@ -135,7 +130,7 @@ and genericStatementMapper
       | Parser_flow.Ast.Statement.DeclareExportDeclaration _
       | Parser_flow.Ast.Statement.ExportDeclaration _
       | Parser_flow.Ast.Statement.ImportDeclaration _ =>
-        switch notTopLevelInnerMostExpr {
+        switch terminalExpr {
         | None => Exp.constant (Const_string "statementBail" None)
         | Some expr => Exp.sequence (Exp.constant (Const_string "statementBail" None)) expr
         }
@@ -318,13 +313,21 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           (Exp.ident (astHelperLid (Lident "##")))
           [("", expressionMapper _object), ("", propertyReason)]
       | Parser_flow.Ast.Expression.This => Exp.ident (astHelperLid (Lident "this"))
+      | Parser_flow.Ast.Expression.Logical {Logical.operator: operator, left, right} =>
+        let operatorReason =
+          switch operator {
+          | Logical.Or => "||"
+          | Logical.And => "&&"
+          };
+        Exp.apply
+          (Exp.ident (astHelperLid (Lident operatorReason)))
+          [("", expressionMapper left), ("", expressionMapper right)]
       | Parser_flow.Ast.Expression.Array _
       | Parser_flow.Ast.Expression.Sequence _
       | Parser_flow.Ast.Expression.Unary _
       | Parser_flow.Ast.Expression.Binary _
       | Parser_flow.Ast.Expression.Assignment _
       | Parser_flow.Ast.Expression.Update _
-      | Parser_flow.Ast.Expression.Logical _
       | Parser_flow.Ast.Expression.Conditional _
       | Parser_flow.Ast.Expression.New _
       | Parser_flow.Ast.Expression.Yield _

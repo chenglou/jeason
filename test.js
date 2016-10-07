@@ -50,11 +50,11 @@ let a2 = React.createClass({
     this.props.handleClick();
   },
   handleClick2: (e) => {
-    this.props.handleClick(this.foo);
+    this.props.handleClick(this.foo.bar);
     this.props.handleClick2();
   },
   render: function() {
-    if (a) {
+    if (a && b() || c) {
       b;
       c;
       d;

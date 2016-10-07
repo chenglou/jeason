@@ -16,9 +16,13 @@ if a {b};
     let bInner = 6;
     let cInner = 7;
     if cond {b};
-    this##leThis##leThat (this##leObj##laObj);
+    this##leThis##leThat this##leObj##laObj;
     (foo.bar ()).oneCall4 ()
   };
   method haha2 foo bar => 1;
-  method haha3 () => 1
+  method haha3 () => {
+    let okA = true && true || false;
+    let okB = 2;
+    3
+  }
 };
