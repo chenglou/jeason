@@ -20,10 +20,26 @@ let parseTreeValueBinding pat::pat expr::expr => {
   pvb_loc: default_loc.contents
 };
 
-let rec genericStatementMapper
-        notTopLevelInnerMostExpr::notTopLevelInnerMostExpr=?
-        ((_, statement): Parser_flow.Ast.Statement.t)
+let rec statementBlockMapper
+        ({Parser_flow.Ast.Statement.Block.body: body}: Parser_flow.Ast.Statement.Block.t)
         :Parsetree.expression =>
+  switch body {
+  | [] => expUnit
+  | bodyNotEmpty =>
+    let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
+    let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper;
+    List.fold_left
+      (
+        fun accumExp statement =>
+          genericStatementMapper notTopLevelInnerMostExpr::accumExp statement
+      )
+      lastItemReason
+      (List.tl bodyNotEmptyFlipped)
+  }
+and genericStatementMapper
+    notTopLevelInnerMostExpr::notTopLevelInnerMostExpr=?
+    ((_, statement): Parser_flow.Ast.Statement.t)
+    :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Statement.(
       switch statement {
@@ -91,8 +107,8 @@ let rec genericStatementMapper
         | None => result
         | Some expr => Exp.sequence result expr
         }
+      | Parser_flow.Ast.Statement.Block body => statementBlockMapper body
       | Parser_flow.Ast.Statement.Empty
-      | Parser_flow.Ast.Statement.Block _
       | Parser_flow.Ast.Statement.Labeled _
       | Parser_flow.Ast.Statement.Break _
       | Parser_flow.Ast.Statement.Continue _
@@ -166,24 +182,10 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
       | Parser_flow.Ast.Expression.ArrowFunction {Function.params: (params, restParam), body, _}
       | Parser_flow.Ast.Expression.Function {Function.params: (params, restParam), body, _} =>
         ignore restParam;
-        ignore body;
         let bodyReason =
           switch body {
           | Function.BodyExpression expression => expressionMapper expression
-          | Function.BodyBlock (_, {Statement.Block.body: body}) =>
-            switch body {
-            | [] => expUnit
-            | bodyNotEmpty =>
-              let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
-              let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper;
-              List.fold_left
-                (
-                  fun accumExp statement =>
-                    genericStatementMapper notTopLevelInnerMostExpr::accumExp statement
-                )
-                lastItemReason
-                (List.tl bodyNotEmptyFlipped)
-            }
+          | Function.BodyBlock (_, body) => statementBlockMapper body
           };
         let partialOrFullResult =
           List.rev params |>

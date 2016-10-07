@@ -55,7 +55,9 @@ let a2 = React.createClass({
   },
   render: function() {
     if (a) {
-      b
+      b;
+      c;
+      d;
     }
     return 1
   }
