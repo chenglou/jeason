@@ -27,13 +27,40 @@ let rec statementBlockMapper
   | [] => expUnit
   | bodyNotEmpty =>
     let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
-    let lastItemReason = List.hd bodyNotEmptyFlipped |> genericStatementMapper terminalExpr::None;
+    let lastItemReason = List.hd bodyNotEmptyFlipped |> statementMapper terminalExpr::None;
     List.fold_left
-      (fun accumExp statement => genericStatementMapper terminalExpr::(Some accumExp) statement)
+      (fun accumExp statement => statementMapper terminalExpr::(Some accumExp) statement)
       lastItemReason
       (List.tl bodyNotEmptyFlipped)
   }
-and genericStatementMapper
+and functionMapper
+    {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
+  open Parser_flow.Ast;
+  ignore restParam;
+  let bodyReason =
+    switch body {
+    | Function.BodyExpression expression => expressionMapper expression
+    | Function.BodyBlock (_, body) => statementBlockMapper body
+    };
+  let partialOrFullResult =
+    List.rev params |>
+    List.fold_left
+      (
+        fun expr' (_, param) =>
+          switch param {
+          | Pattern.Identifier (_, {Identifier.name: name, _}) =>
+            Exp.fun_ "" None (Pat.construct (astHelperLid (Lident name)) None) expr'
+          | _ => Exp.fun_ "" None (Pat.var (astHelperStr "fixme")) expr'
+          }
+      )
+      bodyReason;
+  /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
+  switch params {
+  | [] => Exp.fun_ "" None (Pat.construct (astHelperLid (Lident "()")) None) partialOrFullResult
+  | oneParamOrMore => partialOrFullResult
+  }
+}
+and statementMapper
     terminalExpr::terminalExpr
     ((_, statement): Parser_flow.Ast.Statement.t)
     :Parsetree.expression =>
@@ -51,7 +78,7 @@ and genericStatementMapper
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
         let expr =
           switch init {
-          | None => expUnit
+          | None => Exp.construct (astHelperLid (Lident "None")) None
           | Some e => expressionMapper e
           };
         let innerMostExpr =
@@ -91,11 +118,11 @@ and genericStatementMapper
         let result =
           Exp.ifthenelse
             (expressionMapper test)
-            (genericStatementMapper terminalExpr::None consequent)
+            (statementMapper terminalExpr::None consequent)
             (
               switch alternate {
               | None => None
-              | Some statement => Some (genericStatementMapper terminalExpr::None statement)
+              | Some statement => Some (statementMapper terminalExpr::None statement)
               }
             );
         switch terminalExpr {
@@ -103,7 +130,29 @@ and genericStatementMapper
         | Some expr => Exp.sequence result expr
         }
       | Parser_flow.Ast.Statement.Block body => statementBlockMapper body
-      | Parser_flow.Ast.Statement.Empty
+      | Parser_flow.Ast.Statement.FunctionDeclaration functionWrap =>
+        let funcName =
+          switch functionWrap.Function.id {
+          | None => "thisNameShouldntAppearPleaseReport"
+          | Some (_, {Identifier.name: name, _}) => name
+          };
+        let innerMostExpr =
+          switch terminalExpr {
+          | None => expUnit
+          | Some expr => expr
+          };
+        Exp.let_
+          Nonrecursive
+          [
+            parseTreeValueBinding
+              pat::(Pat.var (astHelperStr funcName)) expr::(functionMapper functionWrap)
+          ]
+          innerMostExpr
+      | Parser_flow.Ast.Statement.Empty =>
+        switch terminalExpr {
+        | None => expUnit
+        | Some expr => expr
+        }
       | Parser_flow.Ast.Statement.Labeled _
       | Parser_flow.Ast.Statement.Break _
       | Parser_flow.Ast.Statement.Continue _
@@ -119,7 +168,6 @@ and genericStatementMapper
       | Parser_flow.Ast.Statement.ForOf _
       | Parser_flow.Ast.Statement.Let _
       | Parser_flow.Ast.Statement.Debugger
-      | Parser_flow.Ast.Statement.FunctionDeclaration _
       | Parser_flow.Ast.Statement.ClassDeclaration _
       | Parser_flow.Ast.Statement.InterfaceDeclaration _
       | Parser_flow.Ast.Statement.DeclareVariable _
@@ -174,32 +222,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
             )
           ]
         )
-      | Parser_flow.Ast.Expression.ArrowFunction {Function.params: (params, restParam), body, _}
-      | Parser_flow.Ast.Expression.Function {Function.params: (params, restParam), body, _} =>
-        ignore restParam;
-        let bodyReason =
-          switch body {
-          | Function.BodyExpression expression => expressionMapper expression
-          | Function.BodyBlock (_, body) => statementBlockMapper body
-          };
-        let partialOrFullResult =
-          List.rev params |>
-          List.fold_left
-            (
-              fun expr' (_, param) =>
-                switch param {
-                | Pattern.Identifier (_, {Identifier.name: name, _}) =>
-                  Exp.fun_ "" None (Pat.construct (astHelperLid (Lident name)) None) expr'
-                | _ => Exp.fun_ "" None (Pat.var (astHelperStr "fixme")) expr'
-                }
-            )
-            bodyReason;
-        /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
-        switch params {
-        | [] =>
-          Exp.fun_ "" None (Pat.construct (astHelperLid (Lident "()")) None) partialOrFullResult
-        | oneParamOrMore => partialOrFullResult
-        }
+      | Parser_flow.Ast.Expression.ArrowFunction functionWrap
+      | Parser_flow.Ast.Expression.Function functionWrap => functionMapper functionWrap
       | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         switch (callee, arguments) {
         | (
@@ -345,96 +369,72 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
     )
   );
 
-let statementsMapper statementWrap =>
-  switch statementWrap {
-  | (_, statement) =>
-    Parser_flow.Ast.Statement.(
-      switch statement {
-      | Parser_flow.Ast.Statement.VariableDeclaration {
-          VariableDeclaration.kind: kind,
-          declarations
-        } =>
-        Parser_flow.Ast.Statement.VariableDeclaration.Declarator.(
-          declarations |>
-          List.map (
-            fun (_, t) => {
-              let initialValue: Parsetree.expression =
-                switch t.init {
-                | None => Exp.construct (astHelperLid (Lident "None")) None
-                | Some expr => expressionMapper expr
-                };
-              Str.value
-                Nonrecursive
-                [
-                  switch t.id {
-                  | (
-                      _,
-                      Parser_flow.Ast.Pattern.Identifier (
-                        _,
-                        {Parser_flow.Ast.Identifier.name: name, _}
-                      )
-                    ) =>
-                    /* TODO: share some code with variable declaration translator above that outputs expressions */
-                    parseTreeValueBinding
-                      pat::(Pat.var {loc: default_loc.contents, txt: name}) expr::initialValue
-                  | (_, Parser_flow.Ast.Pattern.Object _)
-                  | (_, Parser_flow.Ast.Pattern.Array _)
-                  | (_, Parser_flow.Ast.Pattern.Assignment _)
-                  | (_, Parser_flow.Ast.Pattern.Expression _) =>
-                    parseTreeValueBinding
-                      pat::(Pat.var {loc: default_loc.contents, txt: "myVar"}) expr::initialValue
-                  }
-                ]
-            }
-          )
-        )
-      | Parser_flow.Ast.Statement.Empty
-      | Parser_flow.Ast.Statement.Block _
-      | Parser_flow.Ast.Statement.Expression _
-      | Parser_flow.Ast.Statement.If _
-      | Parser_flow.Ast.Statement.Labeled _
-      | Parser_flow.Ast.Statement.Break _
-      | Parser_flow.Ast.Statement.Continue _
-      | Parser_flow.Ast.Statement.With _
-      | Parser_flow.Ast.Statement.TypeAlias _
-      | Parser_flow.Ast.Statement.Switch _
-      | Parser_flow.Ast.Statement.Return _
-      | Parser_flow.Ast.Statement.Throw _
-      | Parser_flow.Ast.Statement.Try _
-      | Parser_flow.Ast.Statement.While _
-      | Parser_flow.Ast.Statement.DoWhile _
-      | Parser_flow.Ast.Statement.For _
-      | Parser_flow.Ast.Statement.ForIn _
-      | Parser_flow.Ast.Statement.ForOf _
-      | Parser_flow.Ast.Statement.Let _
-      | Parser_flow.Ast.Statement.Debugger
-      | Parser_flow.Ast.Statement.FunctionDeclaration _
-      | Parser_flow.Ast.Statement.ClassDeclaration _
-      | Parser_flow.Ast.Statement.InterfaceDeclaration _
-      | Parser_flow.Ast.Statement.DeclareVariable _
-      | Parser_flow.Ast.Statement.DeclareFunction _
-      | Parser_flow.Ast.Statement.DeclareClass _
-      | Parser_flow.Ast.Statement.DeclareModule _
-      | Parser_flow.Ast.Statement.DeclareModuleExports _
-      | Parser_flow.Ast.Statement.DeclareExportDeclaration _
-      | Parser_flow.Ast.Statement.ExportDeclaration _
-      | Parser_flow.Ast.Statement.ImportDeclaration _ => [
-          Str.mk (
-            Pstr_value
-              Nonrecursive
-              [
-                {
-                  pvb_pat: Pat.var {loc: default_loc.contents, txt: "myVar2"},
-                  pvb_expr: expUnit,
-                  pvb_attributes: [],
-                  pvb_loc: default_loc.contents
-                }
-              ]
-          )
+/* top level output format are slightly different than expressions (they have to be `structure_item`s). We'd
+   like to reuse the statementMapper's logic as much as possible though; so we use it, destructure to
+   get what we want, then re-wrap for top level output. */
+let topStatementsMapper statementWrap => {
+  let {pexp_desc, _} = statementMapper terminalExpr::None statementWrap;
+  switch pexp_desc {
+  | Pexp_let _ valueBindings {pexp_desc, _} => Str.value Nonrecursive valueBindings
+  | Pexp_constant a => Str.eval (Exp.constant a)
+  | Pexp_ifthenelse cond consequent alternate =>
+    Str.eval (Exp.ifthenelse cond consequent alternate)
+  | Pexp_fun expr _ argument body =>
+    Str.value Nonrecursive [parseTreeValueBinding pat::argument expr::body]
+  | Pexp_function a =>
+    Str.value
+      Nonrecursive
+      [
+        {
+          pvb_pat: Pat.var {loc: default_loc.contents, txt: "topPlaceholderMe"},
+          pvb_expr: expUnit,
+          pvb_attributes: [],
+          pvb_loc: default_loc.contents
+        }
+      ]
+  | Pexp_ident _
+  | Pexp_apply _ _
+  | Pexp_match _ _
+  | Pexp_try _ _
+  | Pexp_tuple _
+  | Pexp_construct _ _
+  | Pexp_variant _ _
+  | Pexp_record _ _
+  | Pexp_field _ _
+  | Pexp_setfield _ _ _
+  | Pexp_array _
+  | Pexp_sequence _ _
+  | Pexp_while _ _
+  | Pexp_for _ _ _ _ _
+  | Pexp_constraint _ _
+  | Pexp_coerce _ _ _
+  | Pexp_send _ _
+  | Pexp_new _
+  | Pexp_setinstvar _ _
+  | Pexp_override _
+  | Pexp_letmodule _ _ _
+  | Pexp_assert _
+  | Pexp_lazy _
+  | Pexp_poly _ _
+  | Pexp_object _
+  | Pexp_newtype _ _
+  | Pexp_pack _
+  | Pexp_open _ _ _
+  | Pexp_extension _ =>
+    Str.mk (
+      Pstr_value
+        Nonrecursive
+        [
+          {
+            pvb_pat: Pat.var {loc: default_loc.contents, txt: "topPlaceholder"},
+            pvb_expr: expUnit,
+            pvb_attributes: [],
+            pvb_loc: default_loc.contents
+          }
         ]
-      }
     )
-  };
+  }
+};
 
 let () = {
   let parse_options =
@@ -460,6 +460,6 @@ let () = {
   output_string stdout Config.ast_impl_magic_number;
   output_value stdout file;
   let result: Parsetree.structure =
-    statements |> List.map (fun statementWrap => statementsMapper statementWrap) |> List.concat;
+    statements |> List.map (fun statementWrap => topStatementsMapper statementWrap);
   output_value stdout result
 };

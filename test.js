@@ -1,5 +1,7 @@
 let asd = 1;
 let asd2;
+5;
+"hi";
 
 let foo = {
   a: 1,
@@ -29,11 +31,23 @@ let a2 = React.createClass({
     return {a: 1};
   },
   getInitialState2: function() {
+    function asd2() {return 1};
+  },
+  getInitialState2dotFive: function() {
+    function asd2(a) {return 1};
+  },
+  getInitialState3: function() {
+    function asd2(a, b) {return 1};
+    let asd3 = function foo (a, b) {a; return 1};
+  },
+  getInitialState4: function() {
+    (function(a) {return 1});
+    let asd3 = function foo (a, b) {a; return 1};
     return {a: 1};
   },
-  getInitialState3() {},
-  getInitialState4 = (a, b) => 1,
-  getInitialState5 = () => 2,
+  getInitialState7 = (a, b) => 1,
+  getInitialState8 = () => 2,
+  getInitialState9() {},
   shouldComponentUpdate: function(nextProps, nextState) {
     let nothing;
     let a = "hello world";
