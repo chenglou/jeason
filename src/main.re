@@ -275,9 +275,12 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                   }
                 )
             );
-          let createClassObj = Exp.object_ (
-            Cstr.mk (Pat.mk (Ppat_var {loc: default_loc.contents, txt: "this"})) createClassSpec
-          );
+          let createClassObj =
+            Exp.object_
+              attrs::[({loc: default_loc.contents, txt: "bs"}, PStr [])]
+              (
+                Cstr.mk (Pat.mk (Ppat_var {loc: default_loc.contents, txt: "this"})) createClassSpec
+              );
           Exp.apply
             (Exp.ident {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "createClass"})
             [("", createClassObj)]
@@ -392,14 +395,14 @@ let topStatementsMapper statementWrap => {
           pvb_loc: default_loc.contents
         }
       ]
-  | Pexp_ident _
-  | Pexp_apply _ _
+  | Pexp_ident ident => Str.eval (Exp.ident ident)
+  | Pexp_apply expr lst => Str.eval (Exp.apply expr lst)
+  | Pexp_record _ _
   | Pexp_match _ _
   | Pexp_try _ _
   | Pexp_tuple _
   | Pexp_construct _ _
   | Pexp_variant _ _
-  | Pexp_record _ _
   | Pexp_field _ _
   | Pexp_setfield _ _ _
   | Pexp_array _

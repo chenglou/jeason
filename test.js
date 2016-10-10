@@ -2,6 +2,7 @@ let asd = 1;
 let asd2;
 5;
 "hi";
+a;
 
 let foo = {
   a: 1,
