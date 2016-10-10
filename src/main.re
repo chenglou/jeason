@@ -282,7 +282,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                 Cstr.mk (Pat.mk (Ppat_var {loc: default_loc.contents, txt: "this"})) createClassSpec
               );
           Exp.apply
-            (Exp.ident {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "createClass"})
+            (Exp.ident (astHelperLid (Ldot (Lident "ReactRe") "createClass")))
             [("", createClassObj)]
         | (_, arguments) =>
           let argumentsReason =
@@ -316,8 +316,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
              will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
              numbers thinking you're holding true/false */
           /* boolean ? Exp. */
-          Exp.ident (astHelperLid (Lident (boolean ? "Js.true_" : "Js.false")))
-        | Literal.Null => Exp.ident (astHelperLid (Lident "Js.Null.Empty"))
+          Exp.ident (astHelperLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
+        | Literal.Null => Exp.ident (astHelperLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
         | Literal.Number n =>
           let intN = int_of_float n;
           if (float_of_int intN == n) {

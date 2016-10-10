@@ -72,9 +72,9 @@ let a2 = React.createClass({
     if (a && b() || c) {
       b;
       c;
-      d;
+      null;
     }
-    return 1
+    return true
   }
 });
 
