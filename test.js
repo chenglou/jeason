@@ -1,149 +1,148 @@
-let asd = 1;
-let asd2;
-5;
-"hi";
-a;
-
-let foo = {
-  a: 1,
-  b: () => 2,
-  c: (a, b) => 3,
-};
-
-function asd() {
-  return 1;
-}
-
-let arrow = (b) => 2;
-let arrow = () => 2;
-
-if (a) {
-  b
-}
-
-bla();
-bla(a);
-
-let a1 = React.createClass({});
-
-let a2 = React.createClass({
-  foo: 1.5,
-  getInitialState() {
-    return {a: 1};
-  },
-  getInitialState2: function() {
-    function asd2() {return 1};
-  },
-  getInitialState2dotFive: function() {
-    function asd2(a) {return 1};
-  },
-  getInitialState3: function() {
-    function asd2(a, b) {return 1};
-    let asd3 = function foo (a, b) {a; return 1};
-  },
-  getInitialState4: function() {
-    (function(a) {return 1});
-    let asd3 = function foo (a, b) {a; return 1};
-    return {a: 1};
-  },
-  getInitialState7 = (a, b) => 1,
-  getInitialState8 = () => 2,
-  getInitialState9() {},
-  shouldComponentUpdate: function(nextProps, nextState) {
-    let nothing;
-    let a = "hello world";
-    let b = 6;
-    foo();
-    foo(a);
-    (a.baz ()).bar(a, b);
-    var c = 7;
-    const d = 8;
-    return b;
-  },
-  handleClick: (e) => {
-    return 1;
-    this.props.handleClick();
-  },
-  handleClick2: (e) => {
-    this.props.handleClick(this.foo.bar);
-    this.props.handleClick2();
-  },
-  render: function() {
-    if (a && b() || c) {
-      b;
-      c;
-      null;
-    }
-    return true
-  }
-});
-
-// ==================== future test:
-// source:
-// var comp = React.createClass({
-//   propTypes: {
-//     name: React.PropTypes.string.isRequired,
-//     asd: React.PropTypes.oneOfType([React.PropTypes.string]),
-//     asd2: React.PropTypes.oneOf(["foo"])
+// let asd = 1;
+// let asd2;
+// 5;
+// "hi";
+// a;
+//
+// let foo = {
+//   a: 1,
+//   b: () => 2,
+//   c: (a, b) => 3,
+// };
+//
+// function asd() {
+//   return 1;
+// }
+//
+// let arrow = (b) => 2;
+// let arrow = () => 2;
+//
+// if (a) {
+//   b
+// }
+//
+// bla();
+// bla(a);
+//
+// let a1 = React.createClass({});
+//
+// let a2 = React.createClass({
+//   foo: 1.5,
+//   getInitialState() {
+//     return {a: 1};
 //   },
-//   id: null,
-//   getInitialState: function() {
-//     return {
-//       count: 0,
-//       name: 1
-//     };
+//   getInitialState2: function() {
+//     function asd2() {return 1};
 //   },
-//   componentDidMount: function() {
-//     console.log("mounted!");
-//     this.id && setInterval(() => {
-//       console.log('asd');
-//     }, 1000);
+//   getInitialState2dotFive: function() {
+//     function asd2(a) {return 1};
 //   },
-//   componentWillUnmount: function() {
-//     this.id && clearInterval(this.id);
+//   getInitialState3: function() {
+//     function asd2(a, b) {return 1};
+//     let asd3 = function foo (a, b) {a; return 1};
 //   },
-//   handleClick: function() {
-//     this.setState(function(state) {
-//       return {
-//         count: state.count + 1
-//       };
-//     });
+//   getInitialState4: function() {
+//     (function(a) {return 1});
+//     let asd3 = function foo (a, b) {a; return 1};
+//     return {a: 1};
 //   },
-//   handleClick2: function() {
-//     return this.setState({
-//       count: this.state.count + 22
-//     });
+//   getInitialState7 = (a, b) => 1,
+//   getInitialState8 = () => 2,
+//   getInitialState9() {},
+//   shouldComponentUpdate: function(nextProps, nextState) {
+//     let nothing;
+//     let a = "hello world";
+//     let b = 6;
+//     foo();
+//     foo(a);
+//     (a.baz ()).bar(a, b);
+//     var c = 7;
+//     const d = 8;
+//     return b;
+//   },
+//   handleClick: (e) => {
+//     return 1;
+//     this.props.handleClick();
+//   },
+//   handleClick2: (e) => {
+//     this.props.handleClick(this.foo.bar);
+//     this.props.handleClick2();
 //   },
 //   render: function() {
-//     return <div onClick={this.handleClick}>
-//              <div>
-//                {this.state.count}
-//              </div>
-//              <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
-//                {this.state.count}
-//              </Comp>
-//              <ReFile2.comp inner={1} something="duckyou">
-//                {this.state.name}
-//                {this.state.count}
-//                {this.props.children}
-//              </ReFile2.comp>
-//              <ReFile2.comp inner={1} something="asd">
-//                {this.state.name}
-//                {this.state.count}
-//                {this.props.children}
-//              </ReFile2.comp>
-//              <ReFile2.comp inner={1}>
-//                {this.state.name}
-//                {this.state.count}
-//              </ReFile2.comp>
-//              <ReFile2.comp inner={1} something={foo} />
-//              <div>
-//                {this.props.name}
-//              </div>
-//              {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
-//            </div>;
+//     if (a && b() || c) {
+//       b;
+//       c;
+//       null;
+//     }
+//     return true
 //   }
 // });
+
+// source:
+var comp = React.createClass({
+  propTypes: {
+    name: React.PropTypes.string.isRequired,
+    asd: React.PropTypes.oneOfType([React.PropTypes.string]),
+    asd2: React.PropTypes.oneOf(["foo"])
+  },
+  id: null,
+  getInitialState: function() {
+    return {
+      count: 0,
+      name: 1
+    };
+  },
+  componentDidMount: function() {
+    console.log("mounted!");
+    this.id && setInterval(() => {
+      console.log('asd');
+    }, 1000);
+  },
+  componentWillUnmount: function() {
+    this.id && clearInterval(this.id);
+  },
+  handleClick: function() {
+    this.setState(function(state) {
+      return {
+        count: state.count + 1
+      };
+    });
+  },
+  handleClick2: function() {
+    return this.setState({
+      count: this.state.count + 22
+    });
+  },
+  render: function() {
+    return <div onClick={this.handleClick}>
+             <div>
+               {this.state.count}
+             </div>
+             <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
+               {this.state.count}
+             </Comp>
+             <ReFile2.comp inner={1} something="duckyou">
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2.comp>
+             <ReFile2.comp inner={1} something="asd">
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2.comp>
+             <ReFile2.comp inner={1}>
+               {this.state.name}
+               {this.state.count}
+             </ReFile2.comp>
+             <ReFile2.comp inner={1} something={foo} />
+             <div>
+               {this.props.name}
+             </div>
+             {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
+           </div>;
+  }
+});
 
 
 // expected reason code for the component part:

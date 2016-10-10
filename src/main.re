@@ -9,9 +9,7 @@ open Longident;
 
 let expUnit = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
 
-let astHelperStr a => {loc: default_loc.contents, txt: a};
-
-let astHelperLid (a: Longident.t) => {loc: default_loc.contents, txt: a};
+let astHelperStrLid a => {loc: default_loc.contents, txt: a};
 
 let parseTreeValueBinding pat::pat expr::expr => {
   pvb_pat: pat,
@@ -49,14 +47,14 @@ and functionMapper
         fun expr' (_, param) =>
           switch param {
           | Pattern.Identifier (_, {Identifier.name: name, _}) =>
-            Exp.fun_ "" None (Pat.construct (astHelperLid (Lident name)) None) expr'
-          | _ => Exp.fun_ "" None (Pat.var (astHelperStr "fixme")) expr'
+            Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident name)) None) expr'
+          | _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
           }
       )
       bodyReason;
   /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
   switch params {
-  | [] => Exp.fun_ "" None (Pat.construct (astHelperLid (Lident "()")) None) partialOrFullResult
+  | [] => Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident "()")) None) partialOrFullResult
   | oneParamOrMore => partialOrFullResult
   }
 }
@@ -78,7 +76,7 @@ and statementMapper
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
         let expr =
           switch init {
-          | None => Exp.construct (astHelperLid (Lident "None")) None
+          | None => Exp.construct (astHelperStrLid (Lident "None")) None
           | Some e => expressionMapper e
           };
         let innerMostExpr =
@@ -90,7 +88,7 @@ and statementMapper
         | Pattern.Identifier (_, {Identifier.name: name, _}) =>
           Exp.let_
             Nonrecursive
-            [parseTreeValueBinding pat::(Pat.var (astHelperStr name)) expr::expr]
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid name)) expr::expr]
             innerMostExpr
         | Pattern.Object _
         | Pattern.Array _
@@ -145,7 +143,7 @@ and statementMapper
           Nonrecursive
           [
             parseTreeValueBinding
-              pat::(Pat.var (astHelperStr funcName)) expr::(functionMapper functionWrap)
+              pat::(Pat.var (astHelperStrLid funcName)) expr::(functionMapper functionWrap)
           ]
           innerMostExpr
       | Parser_flow.Ast.Statement.Empty =>
@@ -191,7 +189,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
       switch expression {
       | Parser_flow.Ast.Expression.Object {Object.properties: properties} =>
         Exp.extension (
-          {loc: default_loc.contents, txt: "bs.obj"},
+          astHelperStrLid "bs.obj",
           PStr [
             Str.eval (
               Exp.record
@@ -210,9 +208,9 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                           | Object.Property.Literal _
                           | Object.Property.Computed _ => Lident "notThereYet"
                           };
-                        (astHelperLid keyReason, expressionMapper value)
+                        (astHelperStrLid keyReason, expressionMapper value)
                       | Object.SpreadProperty _ => (
-                          astHelperLid (Lident "objectSpreadNotImplementedYet"),
+                          astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
                           Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
                         )
                       }
@@ -253,7 +251,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                     | Function _
                     | ArrowFunction _ =>
                       Cf.method_
-                        (astHelperStr name)
+                        (astHelperStrLid name)
                         Public
                         /* TODO: might not be able to recurse. Might need to be binding specific */
                         (Cfk_concrete Fresh (Exp.poly (expressionMapper valueWrap) None))
@@ -282,7 +280,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                 Cstr.mk (Pat.mk (Ppat_var {loc: default_loc.contents, txt: "this"})) createClassSpec
               );
           Exp.apply
-            (Exp.ident (astHelperLid (Ldot (Lident "ReactRe") "createClass")))
+            (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
             [("", createClassObj)]
         | (_, arguments) =>
           let argumentsReason =
@@ -307,7 +305,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           Exp.apply (expressionMapper calleeWrap) argumentsReason
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
-        Exp.ident (astHelperLid (Lident name))
+        Exp.ident (astHelperStrLid (Lident name))
       | Parser_flow.Ast.Expression.Literal {Literal.value: value, raw} =>
         switch value {
         | Literal.String s => Exp.constant (Const_string s None)
@@ -316,8 +314,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
              will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
              numbers thinking you're holding true/false */
           /* boolean ? Exp. */
-          Exp.ident (astHelperLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
-        | Literal.Null => Exp.ident (astHelperLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
+          Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
+        | Literal.Null => Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
         | Literal.Number n =>
           let intN = int_of_float n;
           if (float_of_int intN == n) {
@@ -333,13 +331,13 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
         let propertyReason =
           switch property {
           | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-            Exp.ident (astHelperLid (Lident name))
+            Exp.ident (astHelperStrLid (Lident name))
           | Member.PropertyExpression expr => expressionMapper expr
           };
         Exp.apply
-          (Exp.ident (astHelperLid (Lident "##")))
+          (Exp.ident (astHelperStrLid (Lident "##")))
           [("", expressionMapper _object), ("", propertyReason)]
-      | Parser_flow.Ast.Expression.This => Exp.ident (astHelperLid (Lident "this"))
+      | Parser_flow.Ast.Expression.This => Exp.ident (astHelperStrLid (Lident "this"))
       | Parser_flow.Ast.Expression.Logical {Logical.operator: operator, left, right} =>
         let operatorReason =
           switch operator {
@@ -347,7 +345,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           | Logical.And => "&&"
           };
         Exp.apply
-          (Exp.ident (astHelperLid (Lident operatorReason)))
+          (Exp.ident (astHelperStrLid (Lident operatorReason)))
           [("", expressionMapper left), ("", expressionMapper right)]
       | Parser_flow.Ast.Expression.Array _
       | Parser_flow.Ast.Expression.Sequence _
