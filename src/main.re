@@ -7,15 +7,48 @@ open Parsetree;
 
 open Longident;
 
-let expUnit = Exp.construct {loc: default_loc.contents, txt: Lident "()"} None;
-
 let astHelperStrLid a => {loc: default_loc.contents, txt: a};
+
+let expUnit = Exp.construct (astHelperStrLid (Lident "()")) None;
 
 let parseTreeValueBinding pat::pat expr::expr => {
   pvb_pat: pat,
   pvb_expr: expr,
   pvb_attributes: [],
   pvb_loc: default_loc.contents
+};
+
+let keepSome lst =>
+  lst |>
+  List.filter (
+    fun a =>
+      switch a {
+      | None => false
+      | _ => true
+      }
+  ) |>
+  List.map (
+    fun a =>
+      switch a {
+      | None => assert false
+      | Some a => a
+      }
+  );
+
+let listToListAst lst => {
+  let nullList = Exp.construct (astHelperStrLid (Lident "[]")) None;
+  /* we transform js array to BS array, except in the case of jsx which takes a reason list instead */
+  switch lst {
+  | [] => nullList
+  | oneItemOrMore =>
+    List.rev oneItemOrMore |>
+    List.fold_left
+      (
+        fun accumExp expr =>
+          Exp.construct (astHelperStrLid (Lident "::")) (Some (Exp.tuple [expr, accumExp]))
+      )
+      nullList
+  }
 };
 
 let rec statementBlockMapper
@@ -58,6 +91,152 @@ and functionMapper
   | oneParamOrMore => partialOrFullResult
   }
 }
+and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
+  Parser_flow.Ast.Literal.(
+    switch value {
+    | String s => Exp.constant (Const_string s None)
+    | Boolean boolean =>
+      /* translate boolean into BuckleScript true/false. We can't translate to ocaml true/false bc these
+         will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
+         numbers thinking you're holding true/false */
+      /* boolean ? Exp. */
+      Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
+    | Null => Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
+    | Number n =>
+      let intN = int_of_float n;
+      if (float_of_int intN == n) {
+        Exp.constant (Const_int intN)
+      } else {
+        Exp.constant (Const_float (string_of_float n))
+      }
+    | RegExp _ => Exp.constant (Const_string "regexPlaceholder" None)
+    }
+  )
+and jsxElementMapper
+    {
+      Parser_flow.Ast.JSX.openingElement: (
+        _,
+        {Parser_flow.Ast.JSX.Opening.name: name, selfClosing, attributes}
+      ),
+      children,
+      _
+    } =>
+  Parser_flow.Ast.JSX.(
+    switch name {
+    | Identifier (_, {Identifier.name: name}) =>
+      let partialArguments =
+        attributes |>
+        List.map (
+          fun attr =>
+            switch attr {
+            | Opening.Attribute (_, {Attribute.name: name, value}) =>
+              /* JSX's <Foo checked /> is sugar for <Foo checked={true} />. What a waste */
+              let valueReason =
+                switch value {
+                | None => Exp.ident (astHelperStrLid (Ldot (Lident "Js") "true_"))
+                | Some (Attribute.Literal _ lit) => literalMapper lit
+                | Some (
+                    Attribute.ExpressionContainer _ {ExpressionContainer.expression: expression}
+                  ) =>
+                  switch expression {
+                  | ExpressionContainer.Expression expr => expressionMapper expr
+                  | ExpressionContainer.EmptyExpression _ => expUnit
+                  }
+                };
+              switch name {
+              | Attribute.Identifier (_, {Identifier.name: name}) => (name, valueReason)
+              | Attribute.NamespacedName _ => (
+                  "NamespacedName",
+                  Exp.constant (Const_string "notImeplementedYet" None)
+                )
+              }
+            | Opening.SpreadAttribute _ => (
+                "spreadAttrbute",
+                Exp.constant (Const_string "notImeplementedYet" None)
+              )
+            }
+        );
+      /* add children */
+      let lastArgument = children |> List.map jsxChildMapper |> keepSome;
+      let arguments = partialArguments @ [("", listToListAst lastArgument)];
+      Exp.apply
+        attrs::[(astHelperStrLid "JSX", PStr [])]
+        (Exp.ident (astHelperStrLid (Lident name)))
+        arguments
+    | NamespacedName _ => Exp.constant (Const_string "noNameSpaceJSXYet" None)
+    | MemberExpression _ => Exp.constant (Const_string "complexJSXYet" None)
+    }
+  )
+and jsxChildMapper (_, child) =>
+  Parser_flow.Ast.JSX.(
+    switch child {
+    | Parser_flow.Ast.JSX.Element element => Some (jsxElementMapper element)
+    | Parser_flow.Ast.JSX.ExpressionContainer {ExpressionContainer.expression: expression} =>
+      switch expression {
+      | ExpressionContainer.Expression expr => Some (expressionMapper expr)
+      | ExpressionContainer.EmptyExpression _ => Some expUnit
+      }
+    | Parser_flow.Ast.JSX.Text {Text.value: value, _} =>
+      /* JS jsx is whitespace sensitive and scatters around "\n          " in the AST */
+      let trimmedValue = String.trim value;
+      if (trimmedValue == "") {
+        None
+      } else {
+        Some (Exp.constant (Const_string value None))
+      }
+    }
+  )
+and reactPropTypesMapper property =>
+  /* TODO: use this */
+  Parser_flow.Ast.(
+    Parser_flow.Ast.Expression.Object.(
+      switch property {
+      | Property (
+          _,
+          {
+            Property.key: Property.Identifier (_, {Identifier.name: name}),
+            value: (_, Expression.Object {properties}),
+            kind,
+            _method,
+            shorthand
+          }
+        ) =>
+        Exp.extension (
+          astHelperStrLid "bs.obj",
+          PStr [
+            Str.eval (
+              Exp.record
+                (
+                  properties |>
+                  List.map (
+                    fun property =>
+                      switch property {
+                      | Property (_, {Property.key: key, value, kind, _method, _}) =>
+                        ignore kind;
+                        ignore _method;
+                        let keyReason =
+                          switch key {
+                          | Property.Identifier (_, {Identifier.name: name, _}) => Lident name
+                          | Property.Literal _
+                          | Property.Computed _ => Lident "notThereYet"
+                          };
+                        (astHelperStrLid keyReason, expressionMapper value)
+                      | SpreadProperty _ => (
+                          astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
+                          Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
+                        )
+                      }
+                  )
+                )
+                None
+            )
+          ]
+        )
+      | Property _ => Exp.constant (Const_string "propTypesReceivedWeirdFormat" None)
+      | SpreadProperty _ => Exp.constant (Const_string "woahSpreadInPropTypesPleaseInline" None)
+      }
+    )
+  )
 and statementMapper
     terminalExpr::terminalExpr
     ((_, statement): Parser_flow.Ast.Statement.t)
@@ -256,29 +435,33 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                         /* TODO: might not be able to recurse. Might need to be binding specific */
                         (Cfk_concrete Fresh (Exp.poly (expressionMapper valueWrap) None))
                     | _ =>
-                      Cf.val_
-                        {loc: default_loc.contents, txt: name}
-                        Immutable
-                        /* TODO: might not be able to recurse. Might need to be binding specific */
-                        (Cfk_concrete Fresh (expressionMapper valueWrap))
+                      switch name {
+                      | "propTypes" =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Immutable
+                          (Cfk_concrete Fresh (expressionMapper valueWrap))
+                      /* (Cfk_concrete Fresh (reactPropTypesMapper property)) */
+                      | name =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Mutable
+                          (Cfk_concrete Fresh (expressionMapper valueWrap))
+                      }
                     }
-                  | _ =>
+                  | Property _
+                  | SpreadProperty _ =>
                     Cf.val_
-                      {loc: default_loc.contents, txt: "notSureWhat"}
+                      (astHelperStrLid "notSureWhat")
                       Immutable
-                      (
-                        Cfk_concrete
-                          Fresh (Exp.ident {loc: default_loc.contents, txt: Lident "thisIs"})
-                      )
+                      (Cfk_concrete Fresh (Exp.ident (astHelperStrLid (Lident "thisIs"))))
                   }
                 )
             );
           let createClassObj =
             Exp.object_
-              attrs::[({loc: default_loc.contents, txt: "bs"}, PStr [])]
-              (
-                Cstr.mk (Pat.mk (Ppat_var {loc: default_loc.contents, txt: "this"})) createClassSpec
-              );
+              attrs::[(astHelperStrLid "bs", PStr [])]
+              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLid "this"))) createClassSpec);
           Exp.apply
             (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
             [("", createClassObj)]
@@ -305,38 +488,86 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           Exp.apply (expressionMapper calleeWrap) argumentsReason
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
-        Exp.ident (astHelperStrLid (Lident name))
-      | Parser_flow.Ast.Expression.Literal {Literal.value: value, raw} =>
-        switch value {
-        | Literal.String s => Exp.constant (Const_string s None)
-        | Literal.Boolean boolean =>
-          /* translate boolean into BuckleScript true/false. We can't translate to ocaml true/false bc these
-             will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
-             numbers thinking you're holding true/false */
-          /* boolean ? Exp. */
-          Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
-        | Literal.Null => Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
-        | Literal.Number n =>
-          let intN = int_of_float n;
-          if (float_of_int intN == n) {
-            Exp.constant (Const_int intN)
-          } else {
-            Exp.constant (Const_float (string_of_float n))
-          }
-        | Literal.RegExp _ => Exp.constant (Const_string "regexPlaceholder" None)
+        if (String.capitalize name == name) {
+          /* Mod.ident (astHelperStrLid (Lident name)) */
+          Exp.ident (astHelperStrLid (Lident name))
+        } else {
+          Exp.ident (astHelperStrLid (Lident name))
         }
-      | Parser_flow.Ast.Expression.Member {Member._object: _object, property, _} =>
-        /* compile js dot access into ##, which BuckleScript will pick up and compile (back) into dot. Will we
-           reach a fixed point lol? */
+      | Parser_flow.Ast.Expression.Literal lit => literalMapper lit
+      | Parser_flow.Ast.Expression.Member {Member._object: (_, _object) as objectWrap, property, _} =>
+        /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
+           transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
+           a fixed point lol? */
+        /* let propertyReason =
+             switch property {
+             | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
+               Exp.ident (astHelperStrLid (Lident name))
+             | Member.PropertyExpression expr => expressionMapper expr
+             };
+           let asd =
+             switch _object {
+             | Identifier (_, {Identifier.name: name, _}) when String.capitalize name == name =>
+               Exp.ident (astHelperStrLid (Ldot (Lident name) propertyReason))
+             | _ =>
+               Exp.apply
+                 (Exp.ident (astHelperStrLid (Lident "##")))
+                 [("", expressionMapper objectWrap), ("", propertyReason)]
+             };
+           asd;
+           let {pexp_desc} = expressionMapper objectWrap;
+           switch pexp_desc {
+           | Pexp_ident _ => (??)
+           | Pexp_constant _ => (??)
+           | Pexp_let _ _ _  => (??)
+           | Pexp_function _ => (??)
+           | Pexp_fun _ _ _ _  => (??)
+           | Pexp_apply _ _  => (??)
+           | Pexp_match _ _  => (??)
+           | Pexp_try _ _  => (??)
+           | Pexp_tuple _ => (??)
+           | Pexp_construct _ _  => (??)
+           | Pexp_variant _ _  => (??)
+           | Pexp_record _ _  => (??)
+           | Pexp_field _ _  => (??)
+           | Pexp_setfield _ _ _  => (??)
+           | Pexp_array _ => (??)
+           | Pexp_ifthenelse _ _ _  => (??)
+           | Pexp_sequence _ _  => (??)
+           | Pexp_while _ _  => (??)
+           | Pexp_for _ _ _ _ _  => (??)
+           | Pexp_constraint _ _  => (??)
+           | Pexp_coerce _ _ _  => (??)
+           | Pexp_send _ _  => (??)
+           | Pexp_new _ => (??)
+           | Pexp_setinstvar _ _  => (??)
+           | Pexp_override _ => (??)
+           | Pexp_letmodule _ _ _  => (??)
+           | Pexp_assert _ => (??)
+           | Pexp_lazy _ => (??)
+           | Pexp_poly _ _  => (??)
+           | Pexp_object _ => (??)
+           | Pexp_newtype _ _  => (??)
+           | Pexp_pack _ => (??)
+           | Pexp_open _ _ _  => (??)
+           | Pexp_extension _ => (??)
+           } */
         let propertyReason =
           switch property {
           | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
             Exp.ident (astHelperStrLid (Lident name))
           | Member.PropertyExpression expr => expressionMapper expr
           };
-        Exp.apply
-          (Exp.ident (astHelperStrLid (Lident "##")))
-          [("", expressionMapper _object), ("", propertyReason)]
+        let left = expressionMapper objectWrap;
+        switch left.pexp_desc {
+        | Pexp_ident {txt: Lident name, _} when String.capitalize name == name =>
+          /* Exp.field propertyReason (astHelperStrLid (Lident "name2")) */
+          /* Exp.ident (astHelperStrLid (Ldot (Lident name) propertyReason)) */
+          /* Exp.construct (astHelperStrLid (Lident name)) (Some propertyReason) */
+          Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+        | _ =>
+          Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+        }
       | Parser_flow.Ast.Expression.This => Exp.ident (astHelperStrLid (Lident "this"))
       | Parser_flow.Ast.Expression.Logical {Logical.operator: operator, left, right} =>
         let operatorReason =
@@ -347,6 +578,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
         Exp.apply
           (Exp.ident (astHelperStrLid (Lident operatorReason)))
           [("", expressionMapper left), ("", expressionMapper right)]
+      | Parser_flow.Ast.Expression.JSXElement element => jsxElementMapper element
       | Parser_flow.Ast.Expression.Array _
       | Parser_flow.Ast.Expression.Sequence _
       | Parser_flow.Ast.Expression.Unary _
@@ -359,7 +591,6 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
       | Parser_flow.Ast.Expression.Comprehension _
       | Parser_flow.Ast.Expression.Generator _
       | Parser_flow.Ast.Expression.Let _
-      | Parser_flow.Ast.Expression.JSXElement _
       | Parser_flow.Ast.Expression.TemplateLiteral _
       | Parser_flow.Ast.Expression.TaggedTemplate _
       | Parser_flow.Ast.Expression.Class _
@@ -387,7 +618,7 @@ let topStatementsMapper statementWrap => {
       Nonrecursive
       [
         {
-          pvb_pat: Pat.var {loc: default_loc.contents, txt: "topPlaceholderMe"},
+          pvb_pat: Pat.var (astHelperStrLid "topPlaceholderMe"),
           pvb_expr: expUnit,
           pvb_attributes: [],
           pvb_loc: default_loc.contents
@@ -427,7 +658,7 @@ let topStatementsMapper statementWrap => {
         Nonrecursive
         [
           {
-            pvb_pat: Pat.var {loc: default_loc.contents, txt: "topPlaceholder"},
+            pvb_pat: Pat.var (astHelperStrLid "topPlaceholder"),
             pvb_expr: expUnit,
             pvb_attributes: [],
             pvb_loc: default_loc.contents

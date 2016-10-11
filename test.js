@@ -113,33 +113,40 @@ var comp = React.createClass({
       count: this.state.count + 22
     });
   },
+  // render: function() {
+  //   return <div onClick={this.handleClick}>
+  //            <div>
+  //              {this.state.count}
+  //            </div>
+  //            <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
+  //              {this.state.count}
+  //            </Comp>
+  //            <ReFile2.comp inner={1} something="duckyou">
+  //              {this.state.name}
+  //              {this.state.count}
+  //              {this.props.children}
+  //            </ReFile2.comp>
+  //            <ReFile2.comp inner={1} something="asd">
+  //              {this.state.name}
+  //              {this.state.count}
+  //              {this.props.children}
+  //            </ReFile2.comp>
+  //            <ReFile2.comp inner={1}>
+  //              {this.state.name}
+  //              {this.state.count}
+  //            </ReFile2.comp>
+  //            <ReFile2.comp inner={1} something={foo} />
+  //            <div>
+  //              {this.props.name}
+  //            </div>
+  //            {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
+  //          </div>;
+  // }
   render: function() {
     return <div onClick={this.handleClick}>
              <div>
                {this.state.count}
              </div>
-             <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
-               {this.state.count}
-             </Comp>
-             <ReFile2.comp inner={1} something="duckyou">
-               {this.state.name}
-               {this.state.count}
-               {this.props.children}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1} something="asd">
-               {this.state.name}
-               {this.state.count}
-               {this.props.children}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1}>
-               {this.state.name}
-               {this.state.count}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1} something={foo} />
-             <div>
-               {this.props.name}
-             </div>
-             {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
            </div>;
   }
 });

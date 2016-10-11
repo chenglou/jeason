@@ -39,8 +39,9 @@ let asd = createClass (
     method haha2 foo bar => 1;
     method haha3 () => {
       let okA = true && true || false;
-      let okB = 2;
-      3
+      let okB = FooModule.Bar;
+      let a = Some foo;
+      div onClick::this##handleClick [1, 2, 3] [@JSX]
     }
   }
   [@bs]
