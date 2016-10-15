@@ -26,6 +26,7 @@ let asd = createClass (
     val asd = "asd";
     val propInit = fun () => 1;
     method haha foo => {
+      let check = React.PropTypes.string.isRequired;
       oneCall1 ();
       oneCall2 ();
       let aInner () => 5;
@@ -39,9 +40,9 @@ let asd = createClass (
     method haha2 foo bar => 1;
     method haha3 () => {
       let okA = true && true || false;
-      let okB = FooModule.Bar;
+      let okB = FooModule.Bar.baz.baaz;
       let a = Some foo;
-      div onClick::this##handleClick [1, 2, 3] [@JSX]
+      <div onClick=this##handleClick> 1 2 3 </div>
     }
   }
   [@bs]

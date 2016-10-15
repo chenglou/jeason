@@ -51,27 +51,46 @@ let listToListAst lst => {
   }
 };
 
+/* let flattenMemberProperties asd =>
+   Parser_flow.Ast.Expression.(
+     switch asd {
+     | Member.PropertyIdentifier _ => (??)
+     | Member.PropertyExpression _ => (??)
+     }
+   ); */
+type context = {
+  terminalExpr: option Parsetree.expression,
+  /* insideReactCreateClass: bool, */
+  insidePropTypes: bool
+};
+
 let rec statementBlockMapper
+        context::context
         ({Parser_flow.Ast.Statement.Block.body: body}: Parser_flow.Ast.Statement.Block.t)
         :Parsetree.expression =>
   switch body {
   | [] => expUnit
   | bodyNotEmpty =>
     let bodyNotEmptyFlipped = List.rev bodyNotEmpty;
-    let lastItemReason = List.hd bodyNotEmptyFlipped |> statementMapper terminalExpr::None;
+    let lastItemReason =
+      List.hd bodyNotEmptyFlipped |> statementMapper context::{...context, terminalExpr: None};
     List.fold_left
-      (fun accumExp statement => statementMapper terminalExpr::(Some accumExp) statement)
+      (
+        fun accumExp statement =>
+          statementMapper context::{...context, terminalExpr: Some accumExp} statement
+      )
       lastItemReason
       (List.tl bodyNotEmptyFlipped)
   }
 and functionMapper
+    context::context
     {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
   open Parser_flow.Ast;
   ignore restParam;
   let bodyReason =
     switch body {
-    | Function.BodyExpression expression => expressionMapper expression
-    | Function.BodyBlock (_, body) => statementBlockMapper body
+    | Function.BodyExpression expression => expressionMapper context::context expression
+    | Function.BodyBlock (_, body) => statementBlockMapper context::context body
     };
   let partialOrFullResult =
     List.rev params |>
@@ -113,6 +132,7 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
     }
   )
 and jsxElementMapper
+    context::context
     {
       Parser_flow.Ast.JSX.openingElement: (
         _,
@@ -139,7 +159,7 @@ and jsxElementMapper
                     Attribute.ExpressionContainer _ {ExpressionContainer.expression: expression}
                   ) =>
                   switch expression {
-                  | ExpressionContainer.Expression expr => expressionMapper expr
+                  | ExpressionContainer.Expression expr => expressionMapper context::context expr
                   | ExpressionContainer.EmptyExpression _ => expUnit
                   }
                 };
@@ -157,23 +177,25 @@ and jsxElementMapper
             }
         );
       /* add children */
-      let lastArgument = children |> List.map jsxChildMapper |> keepSome;
+      let lastArgument =
+        children |> List.map (fun child => jsxChildMapper context::context child) |> keepSome;
       let arguments = partialArguments @ [("", listToListAst lastArgument)];
       Exp.apply
         attrs::[(astHelperStrLid "JSX", PStr [])]
         (Exp.ident (astHelperStrLid (Lident name)))
         arguments
+    | MemberExpression (_, {MemberExpression._object: _object, property}) =>
+      Exp.constant (Const_string "complexJSXYet" None)
     | NamespacedName _ => Exp.constant (Const_string "noNameSpaceJSXYet" None)
-    | MemberExpression _ => Exp.constant (Const_string "complexJSXYet" None)
     }
   )
-and jsxChildMapper (_, child) =>
+and jsxChildMapper context::context (_, child) =>
   Parser_flow.Ast.JSX.(
     switch child {
-    | Parser_flow.Ast.JSX.Element element => Some (jsxElementMapper element)
+    | Parser_flow.Ast.JSX.Element element => Some (jsxElementMapper context::context element)
     | Parser_flow.Ast.JSX.ExpressionContainer {ExpressionContainer.expression: expression} =>
       switch expression {
-      | ExpressionContainer.Expression expr => Some (expressionMapper expr)
+      | ExpressionContainer.Expression expr => Some (expressionMapper context::context expr)
       | ExpressionContainer.EmptyExpression _ => Some expUnit
       }
     | Parser_flow.Ast.JSX.Text {Text.value: value, _} =>
@@ -186,7 +208,41 @@ and jsxChildMapper (_, child) =>
       }
     }
   )
-and reactPropTypesMapper property =>
+and memberMapper
+    context::context
+    {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, _} =>
+  /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
+     transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
+     a fixed point lol? */
+  /* TODO: actually implement this */
+  Parser_flow.Ast.(
+    Parser_flow.Ast.Expression.(
+      if context.insidePropTypes {
+        switch property {
+        | Member.PropertyIdentifier (_, {Identifier.name: name}) =>
+          switch name {
+          | "isRequired" =>
+            Exp.apply
+              (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") "isRequired")))
+              [("", expressionMapper context::context objectWrap)]
+          | actualPropName =>
+            Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") actualPropName))
+          }
+        | Member.PropertyExpression expr => expressionMapper context::context expr
+        }
+      } else {
+        let propertyReason =
+          switch property {
+          | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
+            Exp.ident (astHelperStrLid (Lident name))
+          | Member.PropertyExpression expr => expressionMapper context::context expr
+          };
+        let left = expressionMapper context::context objectWrap;
+        Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+      }
+    )
+  )
+and reactPropTypesMemberMapper context::context property =>
   /* TODO: use this */
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.Object.(
@@ -220,7 +276,7 @@ and reactPropTypesMapper property =>
                           | Property.Literal _
                           | Property.Computed _ => Lident "notThereYet"
                           };
-                        (astHelperStrLid keyReason, expressionMapper value)
+                        (astHelperStrLid keyReason, expressionMapper context::context value)
                       | SpreadProperty _ => (
                           astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
                           Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
@@ -238,7 +294,7 @@ and reactPropTypesMapper property =>
     )
   )
 and statementMapper
-    terminalExpr::terminalExpr
+    context::context
     ((_, statement): Parser_flow.Ast.Statement.t)
     :Parsetree.expression =>
   Parser_flow.Ast.(
@@ -256,10 +312,10 @@ and statementMapper
         let expr =
           switch init {
           | None => Exp.construct (astHelperStrLid (Lident "None")) None
-          | Some e => expressionMapper e
+          | Some e => expressionMapper context::context e
           };
         let innerMostExpr =
-          switch terminalExpr {
+          switch context.terminalExpr {
           | None => expUnit
           | Some expr => expr
           };
@@ -280,33 +336,34 @@ and statementMapper
         let result =
           switch argument {
           | None => expUnit
-          | Some expr => expressionMapper expr
+          | Some expr => expressionMapper context::context expr
           };
-        switch terminalExpr {
+        switch context.terminalExpr {
         | None => result
         | Some expr => Exp.sequence result expr
         }
       | Parser_flow.Ast.Statement.Expression {Expression.expression: expression} =>
-        switch terminalExpr {
-        | None => expressionMapper expression
-        | Some expr => Exp.sequence (expressionMapper expression) expr
+        switch context.terminalExpr {
+        | None => expressionMapper context::context expression
+        | Some expr => Exp.sequence (expressionMapper context::context expression) expr
         }
       | Parser_flow.Ast.Statement.If {If.test: test, consequent, alternate} =>
         let result =
           Exp.ifthenelse
-            (expressionMapper test)
-            (statementMapper terminalExpr::None consequent)
+            (expressionMapper context::context test)
+            (statementMapper context::{...context, terminalExpr: None} consequent)
             (
               switch alternate {
               | None => None
-              | Some statement => Some (statementMapper terminalExpr::None statement)
+              | Some statement =>
+                Some (statementMapper context::{...context, terminalExpr: None} statement)
               }
             );
-        switch terminalExpr {
+        switch context.terminalExpr {
         | None => result
         | Some expr => Exp.sequence result expr
         }
-      | Parser_flow.Ast.Statement.Block body => statementBlockMapper body
+      | Parser_flow.Ast.Statement.Block body => statementBlockMapper context::context body
       | Parser_flow.Ast.Statement.FunctionDeclaration functionWrap =>
         let funcName =
           switch functionWrap.Function.id {
@@ -314,7 +371,7 @@ and statementMapper
           | Some (_, {Identifier.name: name, _}) => name
           };
         let innerMostExpr =
-          switch terminalExpr {
+          switch context.terminalExpr {
           | None => expUnit
           | Some expr => expr
           };
@@ -322,11 +379,12 @@ and statementMapper
           Nonrecursive
           [
             parseTreeValueBinding
-              pat::(Pat.var (astHelperStrLid funcName)) expr::(functionMapper functionWrap)
+              pat::(Pat.var (astHelperStrLid funcName))
+              expr::(functionMapper context::context functionWrap)
           ]
           innerMostExpr
       | Parser_flow.Ast.Statement.Empty =>
-        switch terminalExpr {
+        switch context.terminalExpr {
         | None => expUnit
         | Some expr => expr
         }
@@ -355,14 +413,17 @@ and statementMapper
       | Parser_flow.Ast.Statement.DeclareExportDeclaration _
       | Parser_flow.Ast.Statement.ExportDeclaration _
       | Parser_flow.Ast.Statement.ImportDeclaration _ =>
-        switch terminalExpr {
+        switch context.terminalExpr {
         | None => Exp.constant (Const_string "statementBail" None)
         | Some expr => Exp.sequence (Exp.constant (Const_string "statementBail" None)) expr
         }
       }
     )
   )
-and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.expression =>
+and expressionMapper
+    context::context
+    ((_, expression): Parser_flow.Ast.Expression.t)
+    :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
@@ -387,7 +448,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                           | Object.Property.Literal _
                           | Object.Property.Computed _ => Lident "notThereYet"
                           };
-                        (astHelperStrLid keyReason, expressionMapper value)
+                        (astHelperStrLid keyReason, expressionMapper context::context value)
                       | Object.SpreadProperty _ => (
                           astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
                           Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
@@ -400,7 +461,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           ]
         )
       | Parser_flow.Ast.Expression.ArrowFunction functionWrap
-      | Parser_flow.Ast.Expression.Function functionWrap => functionMapper functionWrap
+      | Parser_flow.Ast.Expression.Function functionWrap =>
+        functionMapper context::context functionWrap
       | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         switch (callee, arguments) {
         | (
@@ -433,20 +495,30 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
                         (astHelperStrLid name)
                         Public
                         /* TODO: might not be able to recurse. Might need to be binding specific */
-                        (Cfk_concrete Fresh (Exp.poly (expressionMapper valueWrap) None))
+                        (
+                          Cfk_concrete
+                            Fresh (Exp.poly (expressionMapper context::context valueWrap) None)
+                        )
                     | _ =>
                       switch name {
                       | "propTypes" =>
                         Cf.val_
                           (astHelperStrLid name)
                           Immutable
-                          (Cfk_concrete Fresh (expressionMapper valueWrap))
+                          (
+                            Cfk_concrete
+                              Fresh
+                              (
+                                expressionMapper
+                                  context::{...context, insidePropTypes: true} valueWrap
+                              )
+                          )
                       /* (Cfk_concrete Fresh (reactPropTypesMapper property)) */
                       | name =>
                         Cf.val_
                           (astHelperStrLid name)
                           Mutable
-                          (Cfk_concrete Fresh (expressionMapper valueWrap))
+                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
                       }
                     }
                   | Property _
@@ -471,7 +543,7 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
             List.map (
               fun argument =>
                 switch argument {
-                | Expression e => ("", expressionMapper e)
+                | Expression e => ("", expressionMapper context::context e)
                 | Spread (_, _) => (
                     "",
                     Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
@@ -485,89 +557,12 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
             | [] => [("", expUnit)]
             | oneArgOrMore => argumentsReason
             };
-          Exp.apply (expressionMapper calleeWrap) argumentsReason
+          Exp.apply (expressionMapper context::context calleeWrap) argumentsReason
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
-        if (String.capitalize name == name) {
-          /* Mod.ident (astHelperStrLid (Lident name)) */
-          Exp.ident (astHelperStrLid (Lident name))
-        } else {
-          Exp.ident (astHelperStrLid (Lident name))
-        }
+        Exp.ident (astHelperStrLid (Lident name))
       | Parser_flow.Ast.Expression.Literal lit => literalMapper lit
-      | Parser_flow.Ast.Expression.Member {Member._object: (_, _object) as objectWrap, property, _} =>
-        /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
-           transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
-           a fixed point lol? */
-        /* let propertyReason =
-             switch property {
-             | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-               Exp.ident (astHelperStrLid (Lident name))
-             | Member.PropertyExpression expr => expressionMapper expr
-             };
-           let asd =
-             switch _object {
-             | Identifier (_, {Identifier.name: name, _}) when String.capitalize name == name =>
-               Exp.ident (astHelperStrLid (Ldot (Lident name) propertyReason))
-             | _ =>
-               Exp.apply
-                 (Exp.ident (astHelperStrLid (Lident "##")))
-                 [("", expressionMapper objectWrap), ("", propertyReason)]
-             };
-           asd;
-           let {pexp_desc} = expressionMapper objectWrap;
-           switch pexp_desc {
-           | Pexp_ident _ => (??)
-           | Pexp_constant _ => (??)
-           | Pexp_let _ _ _  => (??)
-           | Pexp_function _ => (??)
-           | Pexp_fun _ _ _ _  => (??)
-           | Pexp_apply _ _  => (??)
-           | Pexp_match _ _  => (??)
-           | Pexp_try _ _  => (??)
-           | Pexp_tuple _ => (??)
-           | Pexp_construct _ _  => (??)
-           | Pexp_variant _ _  => (??)
-           | Pexp_record _ _  => (??)
-           | Pexp_field _ _  => (??)
-           | Pexp_setfield _ _ _  => (??)
-           | Pexp_array _ => (??)
-           | Pexp_ifthenelse _ _ _  => (??)
-           | Pexp_sequence _ _  => (??)
-           | Pexp_while _ _  => (??)
-           | Pexp_for _ _ _ _ _  => (??)
-           | Pexp_constraint _ _  => (??)
-           | Pexp_coerce _ _ _  => (??)
-           | Pexp_send _ _  => (??)
-           | Pexp_new _ => (??)
-           | Pexp_setinstvar _ _  => (??)
-           | Pexp_override _ => (??)
-           | Pexp_letmodule _ _ _  => (??)
-           | Pexp_assert _ => (??)
-           | Pexp_lazy _ => (??)
-           | Pexp_poly _ _  => (??)
-           | Pexp_object _ => (??)
-           | Pexp_newtype _ _  => (??)
-           | Pexp_pack _ => (??)
-           | Pexp_open _ _ _  => (??)
-           | Pexp_extension _ => (??)
-           } */
-        let propertyReason =
-          switch property {
-          | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-            Exp.ident (astHelperStrLid (Lident name))
-          | Member.PropertyExpression expr => expressionMapper expr
-          };
-        let left = expressionMapper objectWrap;
-        switch left.pexp_desc {
-        | Pexp_ident {txt: Lident name, _} when String.capitalize name == name =>
-          /* Exp.field propertyReason (astHelperStrLid (Lident "name2")) */
-          /* Exp.ident (astHelperStrLid (Ldot (Lident name) propertyReason)) */
-          /* Exp.construct (astHelperStrLid (Lident name)) (Some propertyReason) */
-          Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
-        | _ =>
-          Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
-        }
+      | Parser_flow.Ast.Expression.Member member => memberMapper context::context member
       | Parser_flow.Ast.Expression.This => Exp.ident (astHelperStrLid (Lident "this"))
       | Parser_flow.Ast.Expression.Logical {Logical.operator: operator, left, right} =>
         let operatorReason =
@@ -577,9 +572,22 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
           };
         Exp.apply
           (Exp.ident (astHelperStrLid (Lident operatorReason)))
-          [("", expressionMapper left), ("", expressionMapper right)]
-      | Parser_flow.Ast.Expression.JSXElement element => jsxElementMapper element
-      | Parser_flow.Ast.Expression.Array _
+          [
+            ("", expressionMapper context::context left),
+            ("", expressionMapper context::context right)
+          ]
+      | Parser_flow.Ast.Expression.JSXElement element => jsxElementMapper context::context element
+      | Parser_flow.Ast.Expression.Array {Array.elements: elements} =>
+        elements |>
+        List.map (
+          fun element =>
+            switch element {
+            | None => Exp.construct (astHelperStrLid (Lident "None")) None
+            | Some (Expression e) => expressionMapper context::context e
+            | Some (Spread (_, _)) =>
+              Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+            }
+        ) |> Exp.array
       | Parser_flow.Ast.Expression.Sequence _
       | Parser_flow.Ast.Expression.Unary _
       | Parser_flow.Ast.Expression.Binary _
@@ -605,7 +613,8 @@ and expressionMapper ((_, expression): Parser_flow.Ast.Expression.t) :Parsetree.
    like to reuse the statementMapper's logic as much as possible though; so we use it, destructure to
    get what we want, then re-wrap for top level output. */
 let topStatementsMapper statementWrap => {
-  let {pexp_desc, _} = statementMapper terminalExpr::None statementWrap;
+  let {pexp_desc, _} =
+    statementMapper context::{terminalExpr: None, insidePropTypes: false} statementWrap;
   switch pexp_desc {
   | Pexp_let _ valueBindings {pexp_desc, _} => Str.value Nonrecursive valueBindings
   | Pexp_constant a => Str.eval (Exp.constant a)

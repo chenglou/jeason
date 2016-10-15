@@ -82,8 +82,11 @@
 var comp = React.createClass({
   propTypes: {
     name: React.PropTypes.string.isRequired,
-    asd: React.PropTypes.oneOfType([React.PropTypes.string]),
-    asd2: React.PropTypes.oneOf(["foo"])
+    asd: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]),
+    asd2: React.PropTypes.oneOf(["foo"]),
+    asd3: React.PropTypes.shape({
+      foo: React.PropTypes.oneOf(["foo"]).isRequired,
+    }),
   },
   id: null,
   getInitialState: function() {
@@ -109,44 +112,38 @@ var comp = React.createClass({
     });
   },
   handleClick2: function() {
+    var check = React.PropTypes.string.isRequired;
     return this.setState({
       count: this.state.count + 22
     });
   },
-  // render: function() {
-  //   return <div onClick={this.handleClick}>
-  //            <div>
-  //              {this.state.count}
-  //            </div>
-  //            <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
-  //              {this.state.count}
-  //            </Comp>
-  //            <ReFile2.comp inner={1} something="duckyou">
-  //              {this.state.name}
-  //              {this.state.count}
-  //              {this.props.children}
-  //            </ReFile2.comp>
-  //            <ReFile2.comp inner={1} something="asd">
-  //              {this.state.name}
-  //              {this.state.count}
-  //              {this.props.children}
-  //            </ReFile2.comp>
-  //            <ReFile2.comp inner={1}>
-  //              {this.state.name}
-  //              {this.state.count}
-  //            </ReFile2.comp>
-  //            <ReFile2.comp inner={1} something={foo} />
-  //            <div>
-  //              {this.props.name}
-  //            </div>
-  //            {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
-  //          </div>;
-  // }
   render: function() {
     return <div onClick={this.handleClick}>
              <div>
                {this.state.count}
              </div>
+             <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
+               {this.state.count}
+             </Comp>
+             <ReFile2 inner={1} something="duckyou">
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2>
+             <ReFile2 inner={1} something="asd">
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2>
+             <ReFile2 inner={1}>
+               {this.state.name}
+               {this.state.count}
+             </ReFile2>
+             <ReFile2 inner={1} something={foo} />
+             <div>
+               {this.props.name}
+             </div>
+             {/* array */[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
            </div>;
   }
 });
