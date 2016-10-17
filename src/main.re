@@ -7,9 +7,13 @@ open Parsetree;
 
 open Longident;
 
+/* helpers */
 let astHelperStrLid a => {loc: default_loc.contents, txt: a};
 
 let expUnit = Exp.construct (astHelperStrLid (Lident "()")) None;
+
+/* using this as a convenient placeholder output, for checking whether I've matched the js ast correctly */
+let expMarker = Exp.ident (astHelperStrLid (Lident "marker"));
 
 let parseTreeValueBinding pat::pat expr::expr => {
   pvb_pat: pat,
@@ -51,16 +55,9 @@ let listToListAst lst => {
   }
 };
 
-/* let flattenMemberProperties asd =>
-   Parser_flow.Ast.Expression.(
-     switch asd {
-     | Member.PropertyIdentifier _ => (??)
-     | Member.PropertyExpression _ => (??)
-     }
-   ); */
 type context = {
   terminalExpr: option Parsetree.expression,
-  /* insideReactCreateClass: bool, */
+  insideReactCreateClass: bool,
   insidePropTypes: bool
 };
 
@@ -86,12 +83,28 @@ and functionMapper
     context::context
     {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
   open Parser_flow.Ast;
-  ignore restParam;
   let bodyReason =
     switch body {
     | Function.BodyExpression expression => expressionMapper context::context expression
     | Function.BodyBlock (_, body) => statementBlockMapper context::context body
     };
+  /* let bodyReason =
+     context.insideReactCreateClass ?
+       {
+         let expr =
+           Exp.constraint_
+             (
+               Exp.apply
+                 (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "getState")))
+                 [("", Exp.ident (astHelperStrLid (Lident "this")))]
+             )
+             (Typ.constr (astHelperStrLid (Lident "state")) []);
+         Exp.let_
+           Nonrecursive
+           [parseTreeValueBinding pat::(Pat.var (astHelperStrLid "state")) expr::expr]
+           bodyReason
+       } :
+       bodyReason; */
   let partialOrFullResult =
     List.rev params |>
     List.fold_left
@@ -210,38 +223,47 @@ and jsxChildMapper context::context (_, child) =>
   )
 and memberMapper
     context::context
-    {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, _} =>
+    {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, _} => {
   /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
      transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
      a fixed point lol? */
   /* TODO: actually implement this */
-  Parser_flow.Ast.(
-    Parser_flow.Ast.Expression.(
-      if context.insidePropTypes {
-        switch property {
-        | Member.PropertyIdentifier (_, {Identifier.name: name}) =>
-          switch name {
-          | "isRequired" =>
-            Exp.apply
-              (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") "isRequired")))
-              [("", expressionMapper context::context objectWrap)]
-          | actualPropName =>
-            Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") actualPropName))
-          }
-        | Member.PropertyExpression expr => expressionMapper context::context expr
-        }
-      } else {
-        let propertyReason =
-          switch property {
-          | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-            Exp.ident (astHelperStrLid (Lident name))
-          | Member.PropertyExpression expr => expressionMapper context::context expr
-          };
-        let left = expressionMapper context::context objectWrap;
-        Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+  open Parser_flow.Ast;
+  open Parser_flow.Ast.Expression;
+  let defaultCase () => {
+    let propertyReason =
+      switch property {
+      | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
+        Exp.ident (astHelperStrLid (Lident name))
+      | Member.PropertyExpression expr => expressionMapper context::context expr
+      };
+    let left = expressionMapper context::context objectWrap;
+    Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+  };
+  if context.insidePropTypes {
+    switch property {
+    | Member.PropertyIdentifier (_, {Identifier.name: name}) =>
+      switch name {
+      | "isRequired" =>
+        Exp.apply
+          (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") "isRequired")))
+          [("", expressionMapper context::context objectWrap)]
+      | actualPropName =>
+        Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") actualPropName))
       }
-    )
-  )
+    | Member.PropertyExpression expr => expressionMapper context::context expr
+    }
+  } else if
+    context.insideReactCreateClass {
+    switch (_object, property) {
+    | (This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
+      Exp.ident (astHelperStrLid (Lident "props"))
+    | _ => defaultCase ()
+    }
+  } else {
+    defaultCase ()
+  }
+}
 and reactPropTypesMemberMapper context::context property =>
   /* TODO: use this */
   Parser_flow.Ast.(
@@ -388,6 +410,29 @@ and statementMapper
         | None => expUnit
         | Some expr => expr
         }
+      | Parser_flow.Ast.Statement.ClassDeclaration {
+          id,
+          Parser_flow.Ast.Class.body: body,
+          superClass,
+          typeParameters,
+          superTypeParameters,
+          implements,
+          classDecorators
+        } =>
+        switch superClass {
+        | Some (
+            _,
+            Parser_flow.Ast.Expression.Member {
+              Parser_flow.Ast.Expression.Member._object: (
+                _,
+                Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: "React"})
+              ),
+              property,
+              _
+            }
+          ) => expMarker
+        | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
+        }
       | Parser_flow.Ast.Statement.Labeled _
       | Parser_flow.Ast.Statement.Break _
       | Parser_flow.Ast.Statement.Continue _
@@ -403,7 +448,6 @@ and statementMapper
       | Parser_flow.Ast.Statement.ForOf _
       | Parser_flow.Ast.Statement.Let _
       | Parser_flow.Ast.Statement.Debugger
-      | Parser_flow.Ast.Statement.ClassDeclaration _
       | Parser_flow.Ast.Statement.InterfaceDeclaration _
       | Parser_flow.Ast.Statement.DeclareVariable _
       | Parser_flow.Ast.Statement.DeclareFunction _
@@ -464,6 +508,26 @@ and expressionMapper
       | Parser_flow.Ast.Expression.Function functionWrap =>
         functionMapper context::context functionWrap
       | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
+        let processArguments arguments => {
+          let argumentsReason =
+            arguments |>
+            List.map (
+              fun argument =>
+                switch argument {
+                | Expression e => ("", expressionMapper context::context e)
+                | Spread (_, _) => (
+                    "",
+                    Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+                  )
+                }
+            );
+          /* see Expression.Function above: */
+          /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
+          switch arguments {
+          | [] => [("", expUnit)]
+          | oneArgOrMore => argumentsReason
+          }
+        };
         switch (callee, arguments) {
         | (
             Member {
@@ -473,6 +537,7 @@ and expressionMapper
             },
             [Expression (_, Object {Object.properties: properties})]
           ) =>
+          let context = {...context, insideReactCreateClass: true};
           let createClassSpec =
             properties |>
             List.map (
@@ -537,27 +602,21 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
             [("", createClassObj)]
-        | (_, arguments) =>
-          let argumentsReason =
-            arguments |>
-            List.map (
-              fun argument =>
-                switch argument {
-                | Expression e => ("", expressionMapper context::context e)
-                | Spread (_, _) => (
-                    "",
-                    Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
-                  )
-                }
-            );
-          /* see Expression.Function above: */
-          /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
-          let argumentsReason =
-            switch arguments {
-            | [] => [("", expUnit)]
-            | oneArgOrMore => argumentsReason
-            };
-          Exp.apply (expressionMapper context::context calleeWrap) argumentsReason
+        | (
+            Member {
+              Member._object: (_, This),
+              /* property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}), */
+              property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}),
+              _
+            },
+            arguments
+          )
+            when context.insideReactCreateClass =>
+          Exp.apply
+            (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "setState")))
+            [("", Exp.ident (astHelperStrLid (Lident "this"))), ...processArguments arguments]
+        | (caller, arguments) =>
+          Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
       | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
         Exp.ident (astHelperStrLid (Lident name))
@@ -614,7 +673,9 @@ and expressionMapper
    get what we want, then re-wrap for top level output. */
 let topStatementsMapper statementWrap => {
   let {pexp_desc, _} =
-    statementMapper context::{terminalExpr: None, insidePropTypes: false} statementWrap;
+    statementMapper
+      context::{terminalExpr: None, insidePropTypes: false, insideReactCreateClass: false}
+      statementWrap;
   switch pexp_desc {
   | Pexp_let _ valueBindings {pexp_desc, _} => Str.value Nonrecursive valueBindings
   | Pexp_constant a => Str.eval (Exp.constant a)

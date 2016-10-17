@@ -39,6 +39,7 @@ let asd = createClass (
     };
     method haha2 foo bar => 1;
     method haha3 () => {
+      let state: state = ReactRe.getState this;
       let okA = true && true || false;
       let okB = FooModule.Bar.baz.baaz;
       let a = Some foo;
