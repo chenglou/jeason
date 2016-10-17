@@ -322,10 +322,7 @@ and statementMapper
   Parser_flow.Ast.(
     Parser_flow.Ast.Statement.(
       switch statement {
-      | Parser_flow.Ast.Statement.VariableDeclaration {
-          VariableDeclaration.declarations: declarations,
-          kind
-        } =>
+      | VariableDeclaration {VariableDeclaration.declarations: declarations, kind} =>
         /* this is the part that transforms non-top-level var declarations list (in a single var
            declaration) from js to like, let with a tuple or something in reason */
         /* TODO: actually do this lol */
@@ -353,7 +350,7 @@ and statementMapper
         | Pattern.Expression _ =>
           Exp.constant (Const_string "variationDeclOtherCasesNotImplemented" None)
         }
-      | Parser_flow.Ast.Statement.Return {Return.argument: argument} =>
+      | Return {Return.argument: argument} =>
         /* TODO: warn against early return */
         let result =
           switch argument {
@@ -364,12 +361,12 @@ and statementMapper
         | None => result
         | Some expr => Exp.sequence result expr
         }
-      | Parser_flow.Ast.Statement.Expression {Expression.expression: expression} =>
+      | Expression {Expression.expression: expression} =>
         switch context.terminalExpr {
         | None => expressionMapper context::context expression
         | Some expr => Exp.sequence (expressionMapper context::context expression) expr
         }
-      | Parser_flow.Ast.Statement.If {If.test: test, consequent, alternate} =>
+      | If {If.test: test, consequent, alternate} =>
         let result =
           Exp.ifthenelse
             (expressionMapper context::context test)
@@ -385,8 +382,8 @@ and statementMapper
         | None => result
         | Some expr => Exp.sequence result expr
         }
-      | Parser_flow.Ast.Statement.Block body => statementBlockMapper context::context body
-      | Parser_flow.Ast.Statement.FunctionDeclaration functionWrap =>
+      | Block body => statementBlockMapper context::context body
+      | FunctionDeclaration functionWrap =>
         let funcName =
           switch functionWrap.Function.id {
           | None => "thisNameShouldntAppearPleaseReport"
@@ -405,12 +402,12 @@ and statementMapper
               expr::(functionMapper context::context functionWrap)
           ]
           innerMostExpr
-      | Parser_flow.Ast.Statement.Empty =>
+      | Empty =>
         switch context.terminalExpr {
         | None => expUnit
         | Some expr => expr
         }
-      | Parser_flow.Ast.Statement.ClassDeclaration {
+      | ClassDeclaration {
           id,
           Parser_flow.Ast.Class.body: body,
           superClass,
@@ -433,30 +430,30 @@ and statementMapper
           ) => expMarker
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
-      | Parser_flow.Ast.Statement.Labeled _
-      | Parser_flow.Ast.Statement.Break _
-      | Parser_flow.Ast.Statement.Continue _
-      | Parser_flow.Ast.Statement.With _
-      | Parser_flow.Ast.Statement.TypeAlias _
-      | Parser_flow.Ast.Statement.Switch _
-      | Parser_flow.Ast.Statement.Throw _
-      | Parser_flow.Ast.Statement.Try _
-      | Parser_flow.Ast.Statement.While _
-      | Parser_flow.Ast.Statement.DoWhile _
-      | Parser_flow.Ast.Statement.For _
-      | Parser_flow.Ast.Statement.ForIn _
-      | Parser_flow.Ast.Statement.ForOf _
-      | Parser_flow.Ast.Statement.Let _
-      | Parser_flow.Ast.Statement.Debugger
-      | Parser_flow.Ast.Statement.InterfaceDeclaration _
-      | Parser_flow.Ast.Statement.DeclareVariable _
-      | Parser_flow.Ast.Statement.DeclareFunction _
-      | Parser_flow.Ast.Statement.DeclareClass _
-      | Parser_flow.Ast.Statement.DeclareModule _
-      | Parser_flow.Ast.Statement.DeclareModuleExports _
-      | Parser_flow.Ast.Statement.DeclareExportDeclaration _
-      | Parser_flow.Ast.Statement.ExportDeclaration _
-      | Parser_flow.Ast.Statement.ImportDeclaration _ =>
+      | Labeled _
+      | Break _
+      | Continue _
+      | With _
+      | TypeAlias _
+      | Switch _
+      | Throw _
+      | Try _
+      | While _
+      | DoWhile _
+      | For _
+      | ForIn _
+      | ForOf _
+      | Let _
+      | Debugger
+      | InterfaceDeclaration _
+      | DeclareVariable _
+      | DeclareFunction _
+      | DeclareClass _
+      | DeclareModule _
+      | DeclareModuleExports _
+      | DeclareExportDeclaration _
+      | ExportDeclaration _
+      | ImportDeclaration _ =>
         switch context.terminalExpr {
         | None => Exp.constant (Const_string "statementBail" None)
         | Some expr => Exp.sequence (Exp.constant (Const_string "statementBail" None)) expr
@@ -471,7 +468,7 @@ and expressionMapper
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
-      | Parser_flow.Ast.Expression.Object {Object.properties: properties} =>
+      | Object {Object.properties: properties} =>
         Exp.extension (
           astHelperStrLid "bs.obj",
           PStr [
@@ -504,10 +501,10 @@ and expressionMapper
             )
           ]
         )
-      | Parser_flow.Ast.Expression.ArrowFunction functionWrap
-      | Parser_flow.Ast.Expression.Function functionWrap =>
+      | ArrowFunction functionWrap
+      | Function functionWrap =>
         functionMapper context::context functionWrap
-      | Parser_flow.Ast.Expression.Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
+      | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         let processArguments arguments => {
           let argumentsReason =
             arguments |>
@@ -618,12 +615,12 @@ and expressionMapper
         | (caller, arguments) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
-      | Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: name}) =>
+      | Identifier (_, {Identifier.name: name}) =>
         Exp.ident (astHelperStrLid (Lident name))
-      | Parser_flow.Ast.Expression.Literal lit => literalMapper lit
-      | Parser_flow.Ast.Expression.Member member => memberMapper context::context member
-      | Parser_flow.Ast.Expression.This => Exp.ident (astHelperStrLid (Lident "this"))
-      | Parser_flow.Ast.Expression.Logical {Logical.operator: operator, left, right} =>
+      | Literal lit => literalMapper lit
+      | Member member => memberMapper context::context member
+      | This => Exp.ident (astHelperStrLid (Lident "this"))
+      | Logical {Logical.operator: operator, left, right} =>
         let operatorReason =
           switch operator {
           | Logical.Or => "||"
@@ -635,8 +632,8 @@ and expressionMapper
             ("", expressionMapper context::context left),
             ("", expressionMapper context::context right)
           ]
-      | Parser_flow.Ast.Expression.JSXElement element => jsxElementMapper context::context element
-      | Parser_flow.Ast.Expression.Array {Array.elements: elements} =>
+      | JSXElement element => jsxElementMapper context::context element
+      | Array {Array.elements: elements} =>
         elements |>
         List.map (
           fun element =>
@@ -647,22 +644,22 @@ and expressionMapper
               Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
             }
         ) |> Exp.array
-      | Parser_flow.Ast.Expression.Sequence _
-      | Parser_flow.Ast.Expression.Unary _
-      | Parser_flow.Ast.Expression.Binary _
-      | Parser_flow.Ast.Expression.Assignment _
-      | Parser_flow.Ast.Expression.Update _
-      | Parser_flow.Ast.Expression.Conditional _
-      | Parser_flow.Ast.Expression.New _
-      | Parser_flow.Ast.Expression.Yield _
-      | Parser_flow.Ast.Expression.Comprehension _
-      | Parser_flow.Ast.Expression.Generator _
-      | Parser_flow.Ast.Expression.Let _
-      | Parser_flow.Ast.Expression.TemplateLiteral _
-      | Parser_flow.Ast.Expression.TaggedTemplate _
-      | Parser_flow.Ast.Expression.Class _
-      | Parser_flow.Ast.Expression.TypeCast _
-      | Parser_flow.Ast.Expression.MetaProperty _ =>
+      | Sequence _
+      | Unary _
+      | Binary _
+      | Assignment _
+      | Update _
+      | Conditional _
+      | New _
+      | Yield _
+      | Comprehension _
+      | Generator _
+      | Let _
+      | TemplateLiteral _
+      | TaggedTemplate _
+      | Class _
+      | TypeCast _
+      | MetaProperty _ =>
         Exp.constant (Const_string "expressionPlaceholder" None)
       }
     )
