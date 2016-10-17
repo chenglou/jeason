@@ -508,10 +508,21 @@ and statementMapper
                               )
                           )
                       | (name, _, Some value) =>
-                        Cf.val_
-                          (astHelperStrLid name)
-                          Mutable
-                          (Cfk_concrete Fresh (expressionMapper context::context value))
+                        switch value {
+                        | (_, Expression.Function f)
+                        | (_, Expression.ArrowFunction f) =>
+                          Cf.method_
+                            (astHelperStrLid name)
+                            Public
+                            (
+                              Cfk_concrete Fresh (Exp.poly (functionMapper context::context f) None)
+                            )
+                        | _ =>
+                          Cf.val_
+                            (astHelperStrLid name)
+                            Mutable
+                            (Cfk_concrete Fresh (expressionMapper context::context value))
+                        }
                       | (name, _, None) =>
                         Cf.val_
                           (astHelperStrLid name)
@@ -765,9 +776,41 @@ and expressionMapper
               Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
             }
         ) |> Exp.array
+      | Binary {Binary.operator: operator, left, right} =>
+        let operatorReason =
+          switch operator {
+          | Binary.Equal => "="
+          | Binary.NotEqual => "!="
+          | Binary.StrictEqual => "=="
+          | Binary.StrictNotEqual => "!=="
+          | Binary.LessThan => "<"
+          | Binary.LessThanEqual => "<="
+          | Binary.GreaterThan => ">"
+          | Binary.GreaterThanEqual => ">="
+          | Binary.LShift => "lsl"
+          | Binary.RShift => "lsr"
+          | Binary.RShift3 => "RShift3NotImplemented"
+          /* TODO: integer/float */
+          | Binary.Plus => "+"
+          | Binary.Minus => "-"
+          | Binary.Mult => "*"
+          | Binary.Exp => "**"
+          | Binary.Div => "/"
+          | Binary.Mod => "mod"
+          | Binary.BitOr => "lor"
+          | Binary.Xor => "lxor"
+          | Binary.BitAnd => "land"
+          | Binary.In => "inNotImplemented"
+          | Binary.Instanceof => "instanceOfNotImplemented"
+          };
+        Exp.apply
+          (Exp.ident (astHelperStrLid (Lident operatorReason)))
+          [
+            ("", expressionMapper context::context left),
+            ("", expressionMapper context::context right)
+          ]
       | Sequence _
       | Unary _
-      | Binary _
       | Assignment _
       | Update _
       | Conditional _
