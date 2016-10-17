@@ -133,7 +133,7 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
          numbers thinking you're holding true/false */
       /* boolean ? Exp. */
       Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
-    | Null => Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "Js") "Null") "Empty"))
+    | Null => Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null"))
     | Number n =>
       let intN = int_of_float n;
       if (float_of_int intN == n) {
@@ -409,25 +409,144 @@ and statementMapper
         }
       | ClassDeclaration {
           id,
-          Parser_flow.Ast.Class.body: body,
+          Parser_flow.Ast.Class.body: (_, {Parser_flow.Ast.Class.Body.body: body}),
           superClass,
-          typeParameters,
-          superTypeParameters,
-          implements,
-          classDecorators
+          _
         } =>
-        switch superClass {
-        | Some (
-            _,
-            Parser_flow.Ast.Expression.Member {
-              Parser_flow.Ast.Expression.Member._object: (
-                _,
-                Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: "React"})
-              ),
-              property,
-              _
-            }
-          ) => expMarker
+        switch (id, superClass) {
+        | (
+            Some (_, {Identifier.name: className}),
+            Some (
+              _,
+              Parser_flow.Ast.Expression.Member {
+                Parser_flow.Ast.Expression.Member._object: (
+                  _,
+                  Parser_flow.Ast.Expression.Identifier (_, {Identifier.name: "React"})
+                ),
+                property,
+                _
+              }
+            )
+          ) =>
+          let context = {...context, insideReactCreateClass: true};
+          let createClassSpec =
+            body |>
+            List.map (
+              fun property =>
+                Parser_flow.Ast.(
+                  switch property {
+                  | Class.Body.Method (
+                      _,
+                      {Class.Method.kind: kind, key, value: (_, value), static, _}
+                    ) =>
+                    switch key {
+                    | Expression.Object.Property.Identifier (_, {Identifier.name: name, _}) =>
+                      switch (name, static) {
+                      | (name, false) =>
+                        Cf.method_
+                          (astHelperStrLid name)
+                          Public
+                          (
+                            Cfk_concrete
+                              Fresh (Exp.poly (functionMapper context::context value) None)
+                          )
+                      | (name, true) =>
+                        Cf.val_
+                          (astHelperStrLid "staticMethod")
+                          Immutable
+                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                      }
+                    | _ =>
+                      Cf.val_
+                        (astHelperStrLid "ComplexClassPropKey")
+                        Immutable
+                        (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                    }
+                  | Class.Body.Property (
+                      _,
+                      {Class.Property.key: key, value, typeAnnotation, static}
+                    ) =>
+                    switch key {
+                    | Expression.Object.Property.Identifier (_, {Identifier.name: name, _}) =>
+                      switch (name, static, value) {
+                      | ("propTypes", true, Some value) =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Immutable
+                          (
+                            Cfk_concrete
+                              Fresh
+                              (expressionMapper context::{...context, insidePropTypes: true} value)
+                          )
+                      | ("displayName", true, Some value) =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Immutable
+                          (Cfk_concrete Fresh (expressionMapper context::context value))
+                      | (_, true, _) =>
+                        Cf.val_
+                          (astHelperStrLid "staticPropertyOtherThanPropTypes")
+                          Immutable
+                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                      | ("state", _, Some value) =>
+                        Cf.method_
+                          (astHelperStrLid "getInitialState")
+                          Public
+                          (
+                            Cfk_concrete
+                              Fresh
+                              (
+                                Exp.poly
+                                  (
+                                    Exp.fun_
+                                      ""
+                                      None
+                                      (Pat.construct (astHelperStrLid (Lident "()")) None)
+                                      (expressionMapper context::context value)
+                                  )
+                                  None
+                              )
+                          )
+                      | (name, _, Some value) =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Mutable
+                          (Cfk_concrete Fresh (expressionMapper context::context value))
+                      | (name, _, None) =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Mutable
+                          (
+                            Cfk_concrete
+                              Fresh (Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null")))
+                          )
+                      }
+                    | _ =>
+                      Cf.val_
+                        (astHelperStrLid "ComplexClassPropKey")
+                        Immutable
+                        (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                    }
+                  }
+                )
+            );
+          let createClassObj =
+            Exp.object_
+              attrs::[(astHelperStrLid "bs", PStr [])]
+              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLid "this"))) createClassSpec);
+          let expr =
+            Exp.apply
+              (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
+              [("", createClassObj)];
+          let terminal =
+            switch context.terminalExpr {
+            | None => expUnit
+            | Some expr => expr
+            };
+          Exp.let_
+            Nonrecursive
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid className)) expr::expr]
+            terminal
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
       | Labeled _
@@ -502,8 +621,7 @@ and expressionMapper
           ]
         )
       | ArrowFunction functionWrap
-      | Function functionWrap =>
-        functionMapper context::context functionWrap
+      | Function functionWrap => functionMapper context::context functionWrap
       | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         let processArguments arguments => {
           let argumentsReason =
@@ -575,7 +693,11 @@ and expressionMapper
                                   context::{...context, insidePropTypes: true} valueWrap
                               )
                           )
-                      /* (Cfk_concrete Fresh (reactPropTypesMapper property)) */
+                      | "displayName" =>
+                        Cf.val_
+                          (astHelperStrLid name)
+                          Immutable
+                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
                       | name =>
                         Cf.val_
                           (astHelperStrLid name)
@@ -615,8 +737,7 @@ and expressionMapper
         | (caller, arguments) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
-      | Identifier (_, {Identifier.name: name}) =>
-        Exp.ident (astHelperStrLid (Lident name))
+      | Identifier (_, {Identifier.name: name}) => Exp.ident (astHelperStrLid (Lident name))
       | Literal lit => literalMapper lit
       | Member member => memberMapper context::context member
       | This => Exp.ident (astHelperStrLid (Lident "this"))
@@ -659,8 +780,7 @@ and expressionMapper
       | TaggedTemplate _
       | Class _
       | TypeCast _
-      | MetaProperty _ =>
-        Exp.constant (Const_string "expressionPlaceholder" None)
+      | MetaProperty _ => Exp.constant (Const_string "expressionPlaceholder" None)
       }
     )
   );

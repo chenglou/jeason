@@ -80,12 +80,14 @@
 
 // source:
 class comp extends React.Component {
-  static displayName = "ReFile";
-
+  // the following propTypes should generate some externals
   static propTypes = {
     name: React.PropTypes.string.isRequired,
-    asd: React.PropTypes.oneOfType( /* array */ [React.PropTypes.string]),
-    asd2: React.PropTypes.oneOf( /* array */ ["foo"])
+    asd: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]),
+    asd2: React.PropTypes.oneOf(["foo"]),
+    asd3: React.PropTypes.shape({
+      foo: React.PropTypes.oneOf(["foo"]).isRequired,
+    }),
   };
 
   state = {
@@ -93,78 +95,61 @@ class comp extends React.Component {
     name: 1
   };
 
-  id = /* None */ 0;
+  id = null;
 
   componentDidMount() {
-    var $$this = this;
     console.log("mounted!");
-    return $$this.id = /* Some */ [window.setInterval(function() {
-      console.log("asd");
-      return ( /* () */ 0
-        );
-    }, 1000)];
+    this.id && setInterval(() => {
+      console.log('asd');
+    }, 1000);
   }
 
   componentWillUnmount() {
-    var $$this = this;
-    var match = $$this.id;
-    if (match) {
-      window.clearInterval(match[0]);
-      return ( /* () */ 0
-        );
-    } else {
-      return ( /* () */ 0
-        );
-    }
+    this.id && clearInterval(this.id);
   }
 
   handleClick = () => {
-    var $$this = this;
-    return $$this.setState(function(state) {
+    this.setState(function(state) {
       return {
-        count: state.count + 1 | 0
+        count: state.count + 1
       };
     });
   };
 
   handleClick2 = () => {
-    var $$this = this;
-    var state = $$this.state;
-    return $$this.setState({
-      count: state.count + 22 | 0
+    var check = React.PropTypes.string.isRequired;
+    return this.setState({
+      count: this.state.count + 22
     });
   };
 
   render() {
-    var $$this = this;
-    var state = $$this.state;
-    var props = $$this.props;
-    return <div onClick={$$this.handleClick}>
+    return <div onClick={this.handleClick}>
              <div>
-               {state.count}
+               {this.state.count}
              </div>
-             <Comp onClick={$$this.handleClick} style={{ border: "1px solid black" }} name="asd">
-               {state.count}
+             <Comp onClick={this.handleClick} style={{ border: "1px solid black" }}>
+               {this.state.count}
              </Comp>
-             <ReFile2.comp inner={1} something="duckyou">
-               {state.name}
-               {state.count}
-               {props.children}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1} something="asd">
-               {state.name}
-               {state.count}
-               {props.children}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1}>
-               {state.name}
-               {state.count}
-             </ReFile2.comp>
-             <ReFile2.comp inner={1} something={foo} />
+             <ReFile2 inner={1} something="duckyou">
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2>
+             <ReFile2 inner={1} something="asd" cb={() => this.handleClick} cb2={this.handleClick}>
+               {this.state.name}
+               {this.state.count}
+               {this.props.children}
+             </ReFile2>
+             <ReFile2 inner={1}>
+               {this.state.name}
+               {this.state.count}
+             </ReFile2>
+             <ReFile2 inner={1} something={foo} />
              <div>
-               {props.name}
+               {this.props.name}
              </div>
-             {/* array */[<div key={1}> {props.name + "hello"} </div>, <div key={2}> {props.name} </div>]}
+             {[<div key={1}> {this.props.name + "hello"} </div>, <div key={2}> {this.props.name} </div>]}
            </div>;
   }
 }
