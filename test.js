@@ -1,28 +1,28 @@
-// let asd = 1;
-// let asd2;
-// 5;
-// "hi";
-// a;
-//
-// let foo = {
-//   a: 1,
-//   b: () => 2,
-//   c: (a, b) => 3,
-// };
-//
-// function asd() {
-//   return 1;
-// }
-//
-// let arrow = (b) => 2;
-// let arrow = () => 2;
-//
-// if (a) {
-//   b
-// }
-//
-// bla();
-// bla(a);
+let asd = 1;
+let asd2;
+5;
+"hi";
+a;
+
+let foo = {
+  a: 1,
+  b: () => 2,
+  c: (a, b) => 3,
+};
+
+function asd() {
+  return 1;
+}
+
+let arrow = (b) => 2;
+let arrow = () => 2;
+
+if (a) {
+  b
+}
+
+bla();
+bla(a);
 //
 // let a1 = React.createClass({});
 //

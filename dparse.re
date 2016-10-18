@@ -1,4 +1,11 @@
 /* refmt -print ast dparse.re | pbcopy */
+type props =
+  Js.t <
+    inner : int,
+    something : Js.null_undefined string,
+    children : Js.null_undefined React.reactElement
+  >;
+
 let aTop = Js.Null.empty;
 
 let bTop = 6.5;
@@ -23,6 +30,14 @@ let f a => 1;
 
 let asd = createClass (
   {
+    val propTypes = {
+      "name": React.PropTypes.isRequired React.PropTypes.string,
+      "className": React.PropTypes.oneOfType [|React.PropTypes.isRequired React.PropTypes.number|],
+      "onClick": React.PropTypes.oneOf [|"foo"|],
+      "foo": React.PropTypes.shape {
+        "foo": React.PropTypes.isRequired (React.PropTypes.oneOf [|"foo"|])
+      }
+    };
     val asd = "asd";
     val propInit = fun () => 1;
     method haha foo => {

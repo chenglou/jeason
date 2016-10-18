@@ -58,7 +58,117 @@ let listToListAst lst => {
 type context = {
   terminalExpr: option Parsetree.expression,
   insideReactCreateClass: bool,
-  insidePropTypes: bool
+  insidePropTypes: bool,
+  mutable reactClassSpecRandomProps: list (list string),
+  mutable reactClassSpecPropTypes: list (list (string, Parsetree.expression))
+};
+
+let rec convertPropTypeType asd =>
+  switch asd {
+  | Pexp_apply {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") prop}} lst =>
+    switch prop {
+    | "string" => Ptyp_constr {loc: default_loc.contents, txt: Lident "string"} []
+    | "bool" => Ptyp_constr {loc: default_loc.contents, txt: Lident "bool"} []
+    | "number" => Ptyp_constr {loc: default_loc.contents, txt: Lident "number"} []
+    | "object_" => Ptyp_constr {loc: default_loc.contents, txt: Lident "object_"} []
+    | "symbol" => Ptyp_constr {loc: default_loc.contents, txt: Lident "symbol"} []
+    | "any" => Ptyp_constr {loc: default_loc.contents, txt: Lident "any"} []
+    | "oneOfType" => Ptyp_constr {loc: default_loc.contents, txt: Lident "oneOfType"} []
+    | "oneOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "oneOf"} []
+    | "element" => Ptyp_constr {loc: default_loc.contents, txt: Lident "element"} []
+    | "func" => Ptyp_constr {loc: default_loc.contents, txt: Lident "func"} []
+    | "objectOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "objectOf"} []
+    | "arrayOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "arrayOf"} []
+    | "instanceOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "instanceOf"} []
+    | "shape" => Ptyp_constr {loc: default_loc.contents, txt: Lident "shape"} []
+    | "isRequired" => Ptyp_constr {loc: default_loc.contents, txt: Lident "isRequired"} []
+    | _ => Ptyp_constr {loc: default_loc.contents, txt: Lident "unrecognizedPropType"} []
+    }
+  | _ => Ptyp_constr {loc: default_loc.contents, txt: Lident "unrecognizedPropType"} []
+  };
+
+let propTypesShit fields => {
+  /* reference: go from
+
+     let propTypes = {
+       "inner": PropTypes.isRequired PropTypes.number,
+       "something": PropTypes.string,
+       "children": PropTypes.element
+     };
+
+     to:
+
+     type props =
+     Js.t <
+       inner : int,
+       something : Js.null_undefined string,
+       children : Js.null_undefined React.reactElement
+     >;
+
+     external props : inner::int => something::Js.null_undefined string? => unit => 'reactJsProps = "" [@@bs.obj]; */
+  let convertedFields =
+    fields |>
+    List.map (
+      fun ({txt}, {pexp_desc}) =>
+        switch txt {
+        | Lident propName =>
+          switch pexp_desc {
+          | Pexp_apply
+              {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") prop}} _ as asd => (
+              propName,
+              [],
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc: convertPropTypeType asd
+              }
+            )
+          /* Exp.constant (Const_string prop None) */
+          | _ => (
+              "cannotGenerateType",
+              [],
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc:
+                  Ptyp_constr {loc: default_loc.contents, txt: Lident "ForThisFieldOfPropTypes"} []
+              }
+            )
+          }
+        | _ => (
+            "cannotGenerateType",
+            [],
+            {
+              ptyp_loc: default_loc.contents,
+              ptyp_attributes: [],
+              ptyp_desc:
+                Ptyp_constr
+                  {loc: default_loc.contents, txt: Lident "forComplexPropTypesObjectKey"} []
+            }
+          )
+        }
+    );
+  let objType = Str.type_ [
+    Type.mk
+      kind::Ptype_abstract
+      priv::Public
+      manifest::{
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+            [
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc: Ptyp_object convertedFields Closed
+              }
+            ]
+      }
+      (astHelperStrLid "props")
+  ];
+  (objType, expMarker)
 };
 
 let rec statementBlockMapper
@@ -246,10 +356,10 @@ and memberMapper
       switch name {
       | "isRequired" =>
         Exp.apply
-          (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") "isRequired")))
+          (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "ReactRe") "PropTypes") "isRequired")))
           [("", expressionMapper context::context objectWrap)]
       | actualPropName =>
-        Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "React") "PropTypes") actualPropName))
+        Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "ReactRe") "PropTypes") actualPropName))
       }
     | Member.PropertyExpression expr => expressionMapper context::context expr
     }
@@ -701,7 +811,15 @@ and expressionMapper
                               Fresh
                               (
                                 expressionMapper
-                                  context::{...context, insidePropTypes: true} valueWrap
+                                  context::{
+                                    ...context,
+                                    insidePropTypes: true,
+                                    reactClassSpecPropTypes: [
+                                      [],
+                                      ...context.reactClassSpecPropTypes
+                                    ]
+                                  }
+                                  valueWrap
                               )
                           )
                       | "displayName" =>
@@ -834,28 +952,87 @@ and expressionMapper
 let topStatementsMapper statementWrap => {
   let {pexp_desc, _} =
     statementMapper
-      context::{terminalExpr: None, insidePropTypes: false, insideReactCreateClass: false}
+      context::{
+        terminalExpr: None,
+        insidePropTypes: false,
+        insideReactCreateClass: false,
+        reactClassSpecRandomProps: [],
+        reactClassSpecPropTypes: []
+      }
       statementWrap;
   switch pexp_desc {
-  | Pexp_let _ valueBindings {pexp_desc, _} => Str.value Nonrecursive valueBindings
-  | Pexp_constant a => Str.eval (Exp.constant a)
-  | Pexp_ifthenelse cond consequent alternate =>
-    Str.eval (Exp.ifthenelse cond consequent alternate)
-  | Pexp_fun expr _ argument body =>
-    Str.value Nonrecursive [parseTreeValueBinding pat::argument expr::body]
-  | Pexp_function a =>
-    Str.value
-      Nonrecursive
-      [
+  | Pexp_let _ valueBindings {pexp_desc, _} =>
+    /* get some propTypes, generate externals and type decls, e.g. type props = ... */
+    switch valueBindings {
+    | [
         {
-          pvb_pat: Pat.var (astHelperStrLid "topPlaceholderMe"),
-          pvb_expr: expUnit,
-          pvb_attributes: [],
-          pvb_loc: default_loc.contents
+          pvb_expr: {
+            pexp_desc:
+              Pexp_apply
+                {pexp_desc: Pexp_ident {txt: Ldot (Lident "ReactRe") "createClass"}, _}
+                [(_, {pexp_desc: Pexp_object {pcstr_fields}})]
+          }
         }
-      ]
-  | Pexp_ident ident => Str.eval (Exp.ident ident)
-  | Pexp_apply expr lst => Str.eval (Exp.apply expr lst)
+      ] =>
+      let propTypes =
+        pcstr_fields |>
+        List.filter (
+          fun {pcf_desc} =>
+            switch pcf_desc {
+            | Pcf_val ({txt: "propTypes"}, _, _) => true
+            | _ => false
+            }
+        );
+      switch propTypes {
+      | [
+          {
+            pcf_desc:
+              Pcf_val (
+                _,
+                _,
+                Cfk_concrete
+                  _
+                  {
+                    pexp_desc:
+                      Pexp_extension (
+                        _,
+                        PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record fields _} _}]
+                      )
+                  }
+              )
+          }
+        ] =>
+        switch fields {
+        | [] => [Str.value Nonrecursive valueBindings]
+        | fields =>
+          let (a, b) = propTypesShit fields;
+          [a, Str.eval b, Str.value Nonrecursive valueBindings]
+        }
+      | _ => [Str.value Nonrecursive valueBindings]
+      }
+    | _ => [Str.eval expUnit]
+    }
+  | Pexp_constant a => [Str.eval (Exp.constant a)]
+  | Pexp_ifthenelse cond consequent alternate => [
+      Str.eval (Exp.ifthenelse cond consequent alternate)
+    ]
+  | Pexp_fun expr _ argument body => [
+      Str.value Nonrecursive [parseTreeValueBinding pat::argument expr::body]
+    ]
+  | Pexp_function a => [
+      Str.value
+        Nonrecursive
+        [
+          {
+            pvb_pat: Pat.var (astHelperStrLid "topPlaceholderMe"),
+            pvb_expr: expUnit,
+            pvb_attributes: [],
+            pvb_loc: default_loc.contents
+          }
+        ]
+    ]
+  | Pexp_ident ident => [Str.eval (Exp.ident ident)]
+  | Pexp_apply expr lst => [Str.eval (Exp.apply expr lst)]
   | Pexp_record _ _
   | Pexp_match _ _
   | Pexp_try _ _
@@ -882,19 +1059,20 @@ let topStatementsMapper statementWrap => {
   | Pexp_newtype _ _
   | Pexp_pack _
   | Pexp_open _ _ _
-  | Pexp_extension _ =>
-    Str.mk (
-      Pstr_value
-        Nonrecursive
-        [
-          {
-            pvb_pat: Pat.var (astHelperStrLid "topPlaceholder"),
-            pvb_expr: expUnit,
-            pvb_attributes: [],
-            pvb_loc: default_loc.contents
-          }
-        ]
-    )
+  | Pexp_extension _ => [
+      Str.mk (
+        Pstr_value
+          Nonrecursive
+          [
+            {
+              pvb_pat: Pat.var (astHelperStrLid "topPlaceholder"),
+              pvb_expr: expUnit,
+              pvb_attributes: [],
+              pvb_loc: default_loc.contents
+            }
+          ]
+      )
+    ]
   }
 };
 
@@ -922,6 +1100,6 @@ let () = {
   output_string stdout Config.ast_impl_magic_number;
   output_value stdout file;
   let result: Parsetree.structure =
-    statements |> List.map (fun statementWrap => topStatementsMapper statementWrap);
+    statements |> List.map (fun statementWrap => topStatementsMapper statementWrap) |> List.concat;
   output_value stdout result
 };
