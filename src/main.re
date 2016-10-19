@@ -68,12 +68,8 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
     ptyp_attributes: [],
     ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: Lident str} []
   };
-  let fuck ident => {
-    let partialResult = {
-      ptyp_loc: default_loc.contents,
-      ptyp_attributes: [],
-      ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: ident} []
-    };
+  let wrapIfNotRequired ident => {
+    let partialResult = {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: ident};
     wrappedByRequired ?
       partialResult :
       {
@@ -99,20 +95,7 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
       | "func" => Lident "roughFunctionTypeNotSupportedHere"
       | _ => Lident "cannotUnderstandPropTypeHere"
       };
-    let partialResult = {
-      ptyp_loc: default_loc.contents,
-      ptyp_attributes: [],
-      ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: ident} []
-    };
-    wrappedByRequired ?
-      partialResult :
-      {
-        ptyp_loc: default_loc.contents,
-        ptyp_attributes: [],
-        ptyp_desc:
-          Ptyp_constr
-            {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
-      }
+    wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: ident} [])
   | Pexp_apply
       {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propName}}
       [(_, expr)] =>
@@ -123,23 +106,12 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
     | "objectOf" => unsupported "objectOfUnSupportedUseAVariant"
     | "instanceOf" => unsupported "instanceOfUnSupportedUseAVariant"
     | "arrayOf" =>
-      let partialResult = {
-        ptyp_loc: default_loc.contents,
-        ptyp_attributes: [],
-        ptyp_desc:
-          Ptyp_constr
-            {loc: default_loc.contents, txt: Lident "array"}
-            [convertPropTypeType wrappedByRequired::wrappedByRequired expr]
-      };
-      wrappedByRequired ?
-        partialResult :
-        {
-          ptyp_loc: default_loc.contents,
-          ptyp_attributes: [],
-          ptyp_desc:
-            Ptyp_constr
-              {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
-        }
+      wrapIfNotRequired (
+        Ptyp_constr
+          {loc: default_loc.contents, txt: Lident "array"}
+          /* asdasdasd undefined check output */
+          [convertPropTypeType wrappedByRequired::false expr]
+      )
     | "shape" =>
       let convertedFields =
         switch expr.pexp_desc {
@@ -148,22 +120,11 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
           List.map (
             fun ({txt}, expr) =>
               switch txt {
-              | Lident propName =>
-                let partialResult = convertPropTypeType wrappedByRequired::wrappedByRequired expr;
-                wrappedByRequired ?
-                  (propName, [], partialResult) :
-                  (
-                    propName,
-                    [],
-                    {
-                      ptyp_loc: default_loc.contents,
-                      ptyp_attributes: [],
-                      ptyp_desc:
-                        Ptyp_constr
-                          {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"}
-                          [partialResult]
-                    }
-                  )
+              | Lident propName => (
+                  propName,
+                  [],
+                  convertPropTypeType wrappedByRequired::false expr
+                )
               | _ => (
                   "cannotGenerateType",
                   [],
@@ -179,29 +140,17 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
           )
         | _ => assert false
         };
-      let partialResult = {
-        ptyp_loc: default_loc.contents,
-        ptyp_attributes: [],
-        ptyp_desc:
-          Ptyp_constr
-            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
-            [
-              {
-                ptyp_loc: default_loc.contents,
-                ptyp_attributes: [],
-                ptyp_desc: Ptyp_object convertedFields Closed
-              }
-            ]
-      };
-      wrappedByRequired ?
-        partialResult :
-        {
-          ptyp_loc: default_loc.contents,
-          ptyp_attributes: [],
-          ptyp_desc:
-            Ptyp_constr
-              {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
-        }
+      wrapIfNotRequired (
+        Ptyp_constr
+          {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+          [
+            {
+              ptyp_loc: default_loc.contents,
+              ptyp_attributes: [],
+              ptyp_desc: Ptyp_object convertedFields Closed
+            }
+          ]
+      )
     | _ => unsupported "unrecognizedPropType"
     }
   | _ => unsupported "unrecognizedPropType"
@@ -227,7 +176,7 @@ let propTypesShit fields => {
      >;
 
      external props : inner::int => something::Js.null_undefined string? => unit => 'reactJsProps = "" [@@bs.obj]; */
-  let convertedFields =
+  let convertedFieldsForProps =
     fields |>
     List.map (
       fun ({txt}, expr) =>
@@ -246,7 +195,7 @@ let propTypesShit fields => {
           )
         }
     );
-  let objType = Str.type_ [
+  let propsObjType = Str.type_ [
     Type.mk
       kind::Ptype_abstract
       priv::Public
@@ -260,13 +209,27 @@ let propTypesShit fields => {
               {
                 ptyp_loc: default_loc.contents,
                 ptyp_attributes: [],
-                ptyp_desc: Ptyp_object convertedFields Closed
+                ptyp_desc: Ptyp_object convertedFieldsForProps Closed
               }
             ]
       }
       (astHelperStrLid "props")
   ];
-  (objType, expMarker)
+  let externalType = Str.primitive {
+    pval_name: {loc: default_loc.contents, txt: "props"},
+    pval_prim: [""],
+    pval_loc: default_loc.contents,
+    pval_type: {
+      ptyp_loc: default_loc.contents,
+      ptyp_attributes: [],
+      ptyp_desc:
+        Ptyp_constr
+          {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+          [{ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: Ptyp_object [] Closed}]
+    },
+    pval_attributes: [({loc: default_loc.contents, txt: "bs.obj"}, PStr [])]
+  };
+  (propsObjType, externalType)
 };
 
 let rec statementBlockMapper
@@ -1096,7 +1059,7 @@ let topStatementsMapper statementWrap => {
         | [] => [Str.value Nonrecursive valueBindings]
         | fields =>
           let (a, b) = propTypesShit fields;
-          [a, Str.eval b, Str.value Nonrecursive valueBindings]
+          [a, b, Str.value Nonrecursive valueBindings]
         }
       | _ => [Str.value Nonrecursive valueBindings]
       }

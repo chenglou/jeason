@@ -115,13 +115,18 @@ class comp extends React.Component {
     "objectOf" : React.PropTypes.objectOf([]),
     "instanceOf" : React.PropTypes.instanceOf([]),
     "arrayOf" : React.PropTypes.arrayOf(React.PropTypes.string),
+    "arrayOfRequired" : React.PropTypes.arrayOf(React.PropTypes.string).isRequired,
+    "arrayOfStringRequired" : React.PropTypes.arrayOf(React.PropTypes.string.isRequired),
+    "arrayOfRequiredStringRequired" : React.PropTypes.arrayOf(React.PropTypes.string.isRequired).isRequired,
     "shape" : React.PropTypes.shape({
       foo: bar,
-      "bar": React.PropTypes.arrayOf(React.PropTypes.string).isRequired
+      "bar": React.PropTypes.arrayOf(React.PropTypes.string).isRequired,
+      "bar2": React.PropTypes.arrayOf(React.PropTypes.string.isRequired)
     }),
     "shape2" : React.PropTypes.shape({
       foo: bar,
-      "bar": React.PropTypes.arrayOf(React.PropTypes.string.isRequired)
+      "bar": React.PropTypes.arrayOf(React.PropTypes.string),
+      "bar2": React.PropTypes.arrayOf(React.PropTypes.string.isRequired).isRequired,
     }).isRequired
 
   };
