@@ -144,7 +144,7 @@ class comp extends React.Component {
     this.id && clearInterval(this.id);
   }
 
-  handleClick = () => {
+  handleClick = (event, event2) => {
     this.setState(function(state) {
       return {
         count: state.count + 1
@@ -152,7 +152,7 @@ class comp extends React.Component {
     });
   };
 
-  handleClick2 = () => {
+  handleClick2 = (event) => {
     var check = React.PropTypes.string.isRequired;
     return this.setState({
       count: this.state.count + 22
@@ -216,14 +216,14 @@ class comp extends React.Component {
 //   componentWillUnmount: function() {
 //     this.id && clearInterval(this.id);
 //   },
-//   handleClick: function() {
+//   handleClick: function(event, event2) {
 //     this.setState(function(state) {
 //       return {
 //         count: state.count + 1
 //       };
 //     });
 //   },
-//   handleClick2: function() {
+//   handleClick2: function(event) {
 //     var check = React.PropTypes.string.isRequired;
 //     return this.setState({
 //       count: this.state.count + 22

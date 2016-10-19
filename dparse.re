@@ -31,7 +31,7 @@ let f a => 1;
 let asd = createClass (
   {
     val propTypes = {
-      "name": React.PropTypes.isRequired React.PropTypes.string,
+      /* "name": React.PropTypes.isRequired React.PropTypes.string,
       "name2": React.PropTypes.string,
       "className": React.PropTypes.oneOfType [|React.PropTypes.isRequired React.PropTypes.number|],
       "onClick": React.PropTypes.oneOf [|"foo"|],
@@ -39,7 +39,10 @@ let asd = createClass (
         "foo": ReactRe.PropTypes.isRequired (
           ReactRe.PropTypes.arrayOf (ReactRe.PropTypes.isRequired ReactRe.PropTypes.number)
         )
-      }
+      } */
+
+
+
     };
     val asd = "asd";
     val propInit = fun () => 1;
@@ -56,7 +59,7 @@ let asd = createClass (
       (foo.bar ()).oneCall4 ()
     };
     method haha2 foo bar => 1;
-    method haha3 () => {
+    method haha3 ():state => {
       let state: state = ReactRe.getState this;
       let okA = true && true || false;
       let okB = FooModule.Bar.baz.baaz;

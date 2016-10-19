@@ -289,6 +289,7 @@ let rec statementBlockMapper
   }
 and functionMapper
     context::context
+    returnType::returnType
     {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
   open Parser_flow.Ast;
   let bodyReason =
@@ -313,22 +314,41 @@ and functionMapper
            bodyReason
        } :
        bodyReason; */
-  let partialOrFullResult =
-    List.rev params |>
-    List.fold_left
-      (
-        fun expr' (_, param) =>
-          switch param {
-          | Pattern.Identifier (_, {Identifier.name: name, _}) =>
-            Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident name)) None) expr'
-          | _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
-          }
-      )
-      bodyReason;
-  /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
+  let wrapBodyInReturnType body =>
+    switch returnType {
+    | None => body
+    | Some typeName => Exp.constraint_ body (Typ.constr (astHelperStrLid (Lident typeName)) [])
+    };
   switch params {
-  | [] => Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident "()")) None) partialOrFullResult
-  | oneParamOrMore => partialOrFullResult
+  | [] =>
+    Exp.fun_
+      ""
+      None
+      (Pat.construct (astHelperStrLid (Lident "()")) None)
+      (wrapBodyInReturnType bodyReason)
+  | [(_, first), ...rest] =>
+    let partialResult =
+      List.rev rest |>
+      List.fold_left
+        (
+          fun expr' (_, param) =>
+            switch param {
+            | Pattern.Identifier (_, {Identifier.name: name, _}) =>
+              Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident name)) None) expr'
+            | _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
+            }
+        )
+        bodyReason;
+    switch first {
+    | Pattern.Identifier (_, {Identifier.name: name, _}) =>
+      Exp.fun_
+        ""
+        None
+        (Pat.construct (astHelperStrLid (Lident name)) None)
+        (wrapBodyInReturnType partialResult)
+    | _ =>
+      Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) (wrapBodyInReturnType partialResult)
+    }
   }
 }
 and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
@@ -599,7 +619,7 @@ and statementMapper
           [
             parseTreeValueBinding
               pat::(Pat.var (astHelperStrLid funcName))
-              expr::(functionMapper context::context functionWrap)
+              expr::(functionMapper context::context returnType::None functionWrap)
           ]
           innerMostExpr
       | Empty =>
@@ -648,7 +668,11 @@ and statementMapper
                           Public
                           (
                             Cfk_concrete
-                              Fresh (Exp.poly (functionMapper context::context value) None)
+                              Fresh
+                              (
+                                Exp.poly
+                                  (functionMapper context::context returnType::None value) None
+                              )
                           )
                       | (name, true) =>
                         Cf.val_
@@ -702,7 +726,11 @@ and statementMapper
                                       ""
                                       None
                                       (Pat.construct (astHelperStrLid (Lident "()")) None)
-                                      (expressionMapper context::context value)
+                                      (
+                                        Exp.constraint_
+                                          (expressionMapper context::context value)
+                                          (Typ.constr (astHelperStrLid (Lident "state")) [])
+                                      )
                                   )
                                   None
                               )
@@ -715,7 +743,11 @@ and statementMapper
                             (astHelperStrLid name)
                             Public
                             (
-                              Cfk_concrete Fresh (Exp.poly (functionMapper context::context f) None)
+                              Cfk_concrete
+                                Fresh
+                                (
+                                  Exp.poly (functionMapper returnType::None context::context f) None
+                                )
                             )
                         | _ =>
                           Cf.val_
@@ -800,7 +832,7 @@ and expressionMapper
       switch expression {
       | Object obj => objectMapper context::context obj
       | ArrowFunction functionWrap
-      | Function functionWrap => functionMapper context::context functionWrap
+      | Function functionWrap => functionMapper context::context returnType::None functionWrap
       | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         let processArguments arguments => {
           let argumentsReason =
@@ -848,15 +880,24 @@ and expressionMapper
                       }
                     ) =>
                     switch value {
-                    | Function _
-                    | ArrowFunction _ =>
+                    | Function functionWrap
+                    | ArrowFunction functionWrap =>
                       Cf.method_
                         (astHelperStrLid name)
                         Public
-                        /* TODO: might not be able to recurse. Might need to be binding specific */
                         (
                           Cfk_concrete
-                            Fresh (Exp.poly (expressionMapper context::context valueWrap) None)
+                            Fresh
+                            (
+                              Exp.poly
+                                (
+                                  functionMapper
+                                    context::context
+                                    returnType::(name == "getInitialState" ? Some "state" : None)
+                                    functionWrap
+                                )
+                                None
+                            )
                         )
                     | _ =>
                       switch name {
