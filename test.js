@@ -82,12 +82,48 @@ bla(a);
 class comp extends React.Component {
   // the following propTypes should generate some externals
   static propTypes = {
-    name: React.PropTypes.string.isRequired,
-    asd: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]),
-    asd2: React.PropTypes.oneOf(["foo"]),
-    asd3: React.PropTypes.shape({
-      foo: React.PropTypes.oneOf(["foo"]).isRequired,
+    // name: React.PropTypes.string.isRequired,
+    // name2: React.PropTypes.string,
+    // className: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]).isRequired,
+    // className2: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]).isRequired,
+    // onClick: React.PropTypes.oneOf(["foo"]),
+    // foo: React.PropTypes.shape({
+    //   foo: React.PropTypes.arrayOf(React.PropTypes.number.isRequired).isRequired,
+    // }),
+
+
+    "string" : React.PropTypes.string,
+    "bool" : React.PropTypes.bool,
+    "number" : React.PropTypes.number,
+    "object_" : React.PropTypes.object,
+    "symbol" : React.PropTypes.symbol,
+    "any" : React.PropTypes.any,
+    "element" : PropTypes.element,
+    "func" : React.PropTypes.func,
+
+    "stringRequired" : React.PropTypes.string.isRequired,
+    "boolRequired" : React.PropTypes.bool.isRequired,
+    "numberRequired" : React.PropTypes.number.isRequired,
+    "object_Required" : React.PropTypes.object.isRequired,
+    "symbolRequired" : React.PropTypes.symbol.isRequired,
+    "anyRequired" : React.PropTypes.any.isRequired,
+    "elementRequired" : React.PropTypes.element.isRequired,
+    "funcRequired" : PropTypes.func.isRequired,
+
+    "oneOfType" : React.PropTypes.oneOfType([]),
+    "oneOf" : React.PropTypes.oneOf([]),
+    "objectOf" : React.PropTypes.objectOf([]),
+    "instanceOf" : React.PropTypes.instanceOf([]),
+    "arrayOf" : React.PropTypes.arrayOf(React.PropTypes.string),
+    "shape" : React.PropTypes.shape({
+      foo: bar,
+      "bar": React.PropTypes.arrayOf(React.PropTypes.string).isRequired
     }),
+    "shape2" : React.PropTypes.shape({
+      foo: bar,
+      "bar": React.PropTypes.arrayOf(React.PropTypes.string.isRequired)
+    }).isRequired
+
   };
 
   state = {

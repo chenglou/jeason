@@ -59,33 +59,154 @@ type context = {
   terminalExpr: option Parsetree.expression,
   insideReactCreateClass: bool,
   insidePropTypes: bool,
-  mutable reactClassSpecRandomProps: list (list string),
-  mutable reactClassSpecPropTypes: list (list (string, Parsetree.expression))
+  mutable reactClassSpecRandomProps: list (list string)
 };
 
-let rec convertPropTypeType asd =>
-  switch asd {
-  | Pexp_apply {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") prop}} lst =>
-    switch prop {
-    | "string" => Ptyp_constr {loc: default_loc.contents, txt: Lident "string"} []
-    | "bool" => Ptyp_constr {loc: default_loc.contents, txt: Lident "bool"} []
-    | "number" => Ptyp_constr {loc: default_loc.contents, txt: Lident "number"} []
-    | "object_" => Ptyp_constr {loc: default_loc.contents, txt: Lident "object_"} []
-    | "symbol" => Ptyp_constr {loc: default_loc.contents, txt: Lident "symbol"} []
-    | "any" => Ptyp_constr {loc: default_loc.contents, txt: Lident "any"} []
-    | "oneOfType" => Ptyp_constr {loc: default_loc.contents, txt: Lident "oneOfType"} []
-    | "oneOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "oneOf"} []
-    | "element" => Ptyp_constr {loc: default_loc.contents, txt: Lident "element"} []
-    | "func" => Ptyp_constr {loc: default_loc.contents, txt: Lident "func"} []
-    | "objectOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "objectOf"} []
-    | "arrayOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "arrayOf"} []
-    | "instanceOf" => Ptyp_constr {loc: default_loc.contents, txt: Lident "instanceOf"} []
-    | "shape" => Ptyp_constr {loc: default_loc.contents, txt: Lident "shape"} []
-    | "isRequired" => Ptyp_constr {loc: default_loc.contents, txt: Lident "isRequired"} []
-    | _ => Ptyp_constr {loc: default_loc.contents, txt: Lident "unrecognizedPropType"} []
-    }
-  | _ => Ptyp_constr {loc: default_loc.contents, txt: Lident "unrecognizedPropType"} []
+let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => {
+  let unsupported str => {
+    ptyp_loc: default_loc.contents,
+    ptyp_attributes: [],
+    ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: Lident str} []
   };
+  let fuck ident => {
+    let partialResult = {
+      ptyp_loc: default_loc.contents,
+      ptyp_attributes: [],
+      ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: ident} []
+    };
+    wrappedByRequired ?
+      partialResult :
+      {
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
+      }
+  };
+  switch pexp_desc {
+  | Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propNameThatsNotRequired} =>
+    let ident =
+      switch propNameThatsNotRequired {
+      | "string" => Lident "string"
+      | "bool" => Lident "boolean"
+      /* TODO: smart detection? */
+      | "number" => Lident "int"
+      | "object_" => Lident "roughObjectTypeNotSupportedHere"
+      | "symbol" => Lident "symbolTypeNotSupportedHere"
+      | "any" => Ldot (Lident "Obj") "magic"
+      | "element" => Ldot (Lident "ReactRe") "reactElement"
+      | "func" => Lident "roughFunctionTypeNotSupportedHere"
+      | _ => Lident "cannotUnderstandPropTypeHere"
+      };
+    let partialResult = {
+      ptyp_loc: default_loc.contents,
+      ptyp_attributes: [],
+      ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: ident} []
+    };
+    wrappedByRequired ?
+      partialResult :
+      {
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
+      }
+  | Pexp_apply
+      {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propName}}
+      [(_, expr)] =>
+    switch propName {
+    | "isRequired" => convertPropTypeType wrappedByRequired::true expr
+    | "oneOfType" => unsupported "oneOfTypeUnSupportedUseAVariant"
+    | "oneOf" => unsupported "oneOfUnSupportedUseAVariant"
+    | "objectOf" => unsupported "objectOfUnSupportedUseAVariant"
+    | "instanceOf" => unsupported "instanceOfUnSupportedUseAVariant"
+    | "arrayOf" =>
+      let partialResult = {
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Lident "array"}
+            [convertPropTypeType wrappedByRequired::wrappedByRequired expr]
+      };
+      wrappedByRequired ?
+        partialResult :
+        {
+          ptyp_loc: default_loc.contents,
+          ptyp_attributes: [],
+          ptyp_desc:
+            Ptyp_constr
+              {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
+        }
+    | "shape" =>
+      let convertedFields =
+        switch expr.pexp_desc {
+        | Pexp_extension (_, PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record fields _} _}]) =>
+          fields |>
+          List.map (
+            fun ({txt}, expr) =>
+              switch txt {
+              | Lident propName =>
+                let partialResult = convertPropTypeType wrappedByRequired::wrappedByRequired expr;
+                wrappedByRequired ?
+                  (propName, [], partialResult) :
+                  (
+                    propName,
+                    [],
+                    {
+                      ptyp_loc: default_loc.contents,
+                      ptyp_attributes: [],
+                      ptyp_desc:
+                        Ptyp_constr
+                          {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"}
+                          [partialResult]
+                    }
+                  )
+              | _ => (
+                  "cannotGenerateType",
+                  [],
+                  {
+                    ptyp_loc: default_loc.contents,
+                    ptyp_attributes: [],
+                    ptyp_desc:
+                      Ptyp_constr
+                        {loc: default_loc.contents, txt: Lident "forComplexPropTypesObjectKey"} []
+                  }
+                )
+              }
+          )
+        | _ => assert false
+        };
+      let partialResult = {
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+            [
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc: Ptyp_object convertedFields Closed
+              }
+            ]
+      };
+      wrappedByRequired ?
+        partialResult :
+        {
+          ptyp_loc: default_loc.contents,
+          ptyp_attributes: [],
+          ptyp_desc:
+            Ptyp_constr
+              {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
+        }
+    | _ => unsupported "unrecognizedPropType"
+    }
+  | _ => unsupported "unrecognizedPropType"
+  }
+};
 
 let propTypesShit fields => {
   /* reference: go from
@@ -109,32 +230,9 @@ let propTypesShit fields => {
   let convertedFields =
     fields |>
     List.map (
-      fun ({txt}, {pexp_desc}) =>
+      fun ({txt}, expr) =>
         switch txt {
-        | Lident propName =>
-          switch pexp_desc {
-          | Pexp_apply
-              {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") prop}} _ as asd => (
-              propName,
-              [],
-              {
-                ptyp_loc: default_loc.contents,
-                ptyp_attributes: [],
-                ptyp_desc: convertPropTypeType asd
-              }
-            )
-          /* Exp.constant (Const_string prop None) */
-          | _ => (
-              "cannotGenerateType",
-              [],
-              {
-                ptyp_loc: default_loc.contents,
-                ptyp_attributes: [],
-                ptyp_desc:
-                  Ptyp_constr {loc: default_loc.contents, txt: Lident "ForThisFieldOfPropTypes"} []
-              }
-            )
-          }
+        | Lident propName => (propName, [], convertPropTypeType wrappedByRequired::false expr)
         | _ => (
             "cannotGenerateType",
             [],
@@ -331,6 +429,49 @@ and jsxChildMapper context::context (_, child) =>
       }
     }
   )
+and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties: properties} =>
+  Parser_flow.Ast.Expression.Object.(
+    Parser_flow.Ast.(
+      Exp.extension (
+        astHelperStrLid "bs.obj",
+        PStr [
+          Str.eval (
+            Exp.record
+              (
+                properties |>
+                List.map (
+                  fun property =>
+                    switch property {
+                    | Property (_, {Property.key: key, value, kind, _method, _}) =>
+                      ignore kind;
+                      ignore _method;
+                      let keyReason =
+                        switch key {
+                        | Property.Literal (_, {Literal.value: name}) =>
+                          switch name {
+                          | Literal.String s => Lident s
+                          | Literal.Boolean b => Lident (string_of_bool b)
+                          | Literal.Null => Lident "null"
+                          | Literal.Number n => Lident (string_of_float n)
+                          | Literal.RegExp _ => Lident "regexAsKeyNotImplementedYet"
+                          }
+                        | Property.Identifier (_, {Identifier.name: name, _}) => Lident name
+                        | Property.Computed _ => Lident "notThereYet"
+                        };
+                      (astHelperStrLid keyReason, expressionMapper context::context value)
+                    | SpreadProperty _ => (
+                        astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
+                        Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
+                      )
+                    }
+                )
+              )
+              None
+          )
+        ]
+      )
+    )
+  )
 and memberMapper
     context::context
     {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, _} => {
@@ -374,57 +515,6 @@ and memberMapper
     defaultCase ()
   }
 }
-and reactPropTypesMemberMapper context::context property =>
-  /* TODO: use this */
-  Parser_flow.Ast.(
-    Parser_flow.Ast.Expression.Object.(
-      switch property {
-      | Property (
-          _,
-          {
-            Property.key: Property.Identifier (_, {Identifier.name: name}),
-            value: (_, Expression.Object {properties}),
-            kind,
-            _method,
-            shorthand
-          }
-        ) =>
-        Exp.extension (
-          astHelperStrLid "bs.obj",
-          PStr [
-            Str.eval (
-              Exp.record
-                (
-                  properties |>
-                  List.map (
-                    fun property =>
-                      switch property {
-                      | Property (_, {Property.key: key, value, kind, _method, _}) =>
-                        ignore kind;
-                        ignore _method;
-                        let keyReason =
-                          switch key {
-                          | Property.Identifier (_, {Identifier.name: name, _}) => Lident name
-                          | Property.Literal _
-                          | Property.Computed _ => Lident "notThereYet"
-                          };
-                        (astHelperStrLid keyReason, expressionMapper context::context value)
-                      | SpreadProperty _ => (
-                          astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
-                          Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
-                        )
-                      }
-                  )
-                )
-                None
-            )
-          ]
-        )
-      | Property _ => Exp.constant (Const_string "propTypesReceivedWeirdFormat" None)
-      | SpreadProperty _ => Exp.constant (Const_string "woahSpreadInPropTypesPleaseInline" None)
-      }
-    )
-  )
 and statementMapper
     context::context
     ((_, statement): Parser_flow.Ast.Statement.t)
@@ -708,39 +798,7 @@ and expressionMapper
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
-      | Object {Object.properties: properties} =>
-        Exp.extension (
-          astHelperStrLid "bs.obj",
-          PStr [
-            Str.eval (
-              Exp.record
-                (
-                  properties |>
-                  List.map (
-                    fun property =>
-                      switch property {
-                      | Object.Property (_, {Object.Property.key: key, value, kind, _method, _}) =>
-                        ignore kind;
-                        ignore _method;
-                        let keyReason =
-                          switch key {
-                          | Object.Property.Identifier (_, {Identifier.name: name, _}) =>
-                            Lident name
-                          | Object.Property.Literal _
-                          | Object.Property.Computed _ => Lident "notThereYet"
-                          };
-                        (astHelperStrLid keyReason, expressionMapper context::context value)
-                      | Object.SpreadProperty _ => (
-                          astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
-                          Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
-                        )
-                      }
-                  )
-                )
-                None
-            )
-          ]
-        )
+      | Object obj => objectMapper context::context obj
       | ArrowFunction functionWrap
       | Function functionWrap => functionMapper context::context functionWrap
       | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
@@ -811,15 +869,7 @@ and expressionMapper
                               Fresh
                               (
                                 expressionMapper
-                                  context::{
-                                    ...context,
-                                    insidePropTypes: true,
-                                    reactClassSpecPropTypes: [
-                                      [],
-                                      ...context.reactClassSpecPropTypes
-                                    ]
-                                  }
-                                  valueWrap
+                                  context::{...context, insidePropTypes: true} valueWrap
                               )
                           )
                       | "displayName" =>
@@ -956,8 +1006,7 @@ let topStatementsMapper statementWrap => {
         terminalExpr: None,
         insidePropTypes: false,
         insideReactCreateClass: false,
-        reactClassSpecRandomProps: [],
-        reactClassSpecPropTypes: []
+        reactClassSpecRandomProps: []
       }
       statementWrap;
   switch pexp_desc {

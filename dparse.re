@@ -32,10 +32,13 @@ let asd = createClass (
   {
     val propTypes = {
       "name": React.PropTypes.isRequired React.PropTypes.string,
+      "name2": React.PropTypes.string,
       "className": React.PropTypes.oneOfType [|React.PropTypes.isRequired React.PropTypes.number|],
       "onClick": React.PropTypes.oneOf [|"foo"|],
-      "foo": React.PropTypes.shape {
-        "foo": React.PropTypes.isRequired (React.PropTypes.oneOf [|"foo"|])
+      "foo": ReactRe.PropTypes.shape {
+        "foo": ReactRe.PropTypes.isRequired (
+          ReactRe.PropTypes.arrayOf (ReactRe.PropTypes.isRequired ReactRe.PropTypes.number)
+        )
       }
     };
     val asd = "asd";
