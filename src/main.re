@@ -62,16 +62,37 @@ type context = {
   mutable reactClassSpecRandomProps: list (list string)
 };
 
-let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => {
-  let unsupported str => {
-    ptyp_loc: default_loc.contents,
-    ptyp_attributes: [],
-    ptyp_desc: Ptyp_constr {loc: default_loc.contents, txt: Lident str} []
-  };
+let rec convertPropTypeType
+        isTopLevel::isTopLevel
+        isForFunctionLabel::isForFunctionLabel
+        wrappedByRequired::wrappedByRequired
+        {pexp_desc} => {
   let wrapIfNotRequired ident => {
     let partialResult = {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: ident};
-    wrappedByRequired ?
-      partialResult :
+    if wrappedByRequired {
+      partialResult
+    } else if (isTopLevel && isForFunctionLabel) {
+      {
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          /* weird ast rule for 4.02: if you want to create an optional labelled argument type, you need to
+             prepend the name of the label with a question mark (see propTypesToActualTypes) and have the
+             special *predef* node */
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "*predef*") "option"}
+            [
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc:
+                  Ptyp_constr
+                    {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"}
+                    [partialResult]
+              }
+            ]
+      }
+    } else {
       {
         ptyp_loc: default_loc.contents,
         ptyp_attributes: [],
@@ -79,14 +100,18 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
           Ptyp_constr
             {loc: default_loc.contents, txt: Ldot (Lident "Js") "null_undefined"} [partialResult]
       }
+    }
   };
+  let unsupported str => wrapIfNotRequired (
+    Ptyp_constr {loc: default_loc.contents, txt: Lident str} []
+  );
   switch pexp_desc {
   | Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propNameThatsNotRequired} =>
     let ident =
       switch propNameThatsNotRequired {
       | "string" => Lident "string"
       | "bool" => Lident "boolean"
-      /* TODO: smart detection? */
+      /* TODO: smart detection */
       | "number" => Lident "int"
       | "object_" => Lident "roughObjectTypeNotSupportedHere"
       | "symbol" => Lident "symbolTypeNotSupportedHere"
@@ -100,7 +125,9 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
       {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propName}}
       [(_, expr)] =>
     switch propName {
-    | "isRequired" => convertPropTypeType wrappedByRequired::true expr
+    | "isRequired" =>
+      convertPropTypeType
+        isTopLevel::false isForFunctionLabel::isForFunctionLabel wrappedByRequired::true expr
     | "oneOfType" => unsupported "oneOfTypeUnSupportedUseAVariant"
     | "oneOf" => unsupported "oneOfUnSupportedUseAVariant"
     | "objectOf" => unsupported "objectOfUnSupportedUseAVariant"
@@ -109,8 +136,13 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
       wrapIfNotRequired (
         Ptyp_constr
           {loc: default_loc.contents, txt: Lident "array"}
-          /* asdasdasd undefined check output */
-          [convertPropTypeType wrappedByRequired::false expr]
+          [
+            convertPropTypeType
+              isTopLevel::false
+              isForFunctionLabel::isForFunctionLabel
+              wrappedByRequired::false
+              expr
+          ]
       )
     | "shape" =>
       let convertedFields =
@@ -123,7 +155,11 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
               | Lident propName => (
                   propName,
                   [],
-                  convertPropTypeType wrappedByRequired::false expr
+                  convertPropTypeType
+                    isTopLevel::false
+                    isForFunctionLabel::isForFunctionLabel
+                    wrappedByRequired::false
+                    expr
                 )
               | _ => (
                   "cannotGenerateType",
@@ -157,7 +193,7 @@ let rec convertPropTypeType wrappedByRequired::wrappedByRequired {pexp_desc} => 
   }
 };
 
-let propTypesShit fields => {
+let propTypesToActualTypes fields => {
   /* reference: go from
 
      let propTypes = {
@@ -172,16 +208,25 @@ let propTypesShit fields => {
      Js.t <
        inner : int,
        something : Js.null_undefined string,
-       children : Js.null_undefined React.reactElement
+       children : Js.null_undefined ReactRe.reactElement
      >;
 
-     external props : inner::int => something::Js.null_undefined string? => unit => 'reactJsProps = "" [@@bs.obj]; */
+     external props : inner::int =>
+      something::Js.null_undefined string? =>
+      children::Js.null_undefined ReactRe.reactElement? =>
+      unit =>
+      'reactJsProps = "" [@@bs.obj]; */
   let convertedFieldsForProps =
     fields |>
     List.map (
       fun ({txt}, expr) =>
         switch txt {
-        | Lident propName => (propName, [], convertPropTypeType wrappedByRequired::false expr)
+        | Lident propName => (
+            propName,
+            [],
+            convertPropTypeType
+              isTopLevel::true isForFunctionLabel::false wrappedByRequired::false expr
+          )
         | _ => (
             "cannotGenerateType",
             [],
@@ -215,18 +260,60 @@ let propTypesShit fields => {
       }
       (astHelperStrLid "props")
   ];
+  let inner = {
+    ptyp_loc: default_loc.contents,
+    ptyp_attributes: [],
+    ptyp_desc:
+      Ptyp_arrow
+        ""
+        {
+          ptyp_loc: default_loc.contents,
+          ptyp_attributes: [],
+          ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+        }
+        {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: Ptyp_var "reactJsProps"}
+  };
+  let asd =
+    fields |> List.rev |>
+    List.fold_left
+      (
+        fun acc ({txt}, {pexp_desc} as expr) => {
+          let topLevelIsRequired =
+            switch pexp_desc {
+            | Pexp_apply
+                {
+                  pexp_desc:
+                    Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") "isRequired"}
+                }
+                [(_, expr)] =>
+              true
+            | _ => false
+            };
+          let label =
+            switch txt {
+            | Lident propName => topLevelIsRequired ? propName : "?" ^ propName
+            | _ => "complexPropTypesObjectKey"
+            };
+          {
+            ptyp_loc: default_loc.contents,
+            ptyp_attributes: [],
+            ptyp_desc:
+              Ptyp_arrow
+                label
+                (
+                  convertPropTypeType
+                    isTopLevel::true isForFunctionLabel::true wrappedByRequired::false expr
+                )
+                acc
+          }
+        }
+      )
+      inner;
   let externalType = Str.primitive {
     pval_name: {loc: default_loc.contents, txt: "props"},
     pval_prim: [""],
     pval_loc: default_loc.contents,
-    pval_type: {
-      ptyp_loc: default_loc.contents,
-      ptyp_attributes: [],
-      ptyp_desc:
-        Ptyp_constr
-          {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
-          [{ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: Ptyp_object [] Closed}]
-    },
+    pval_type: asd,
     pval_attributes: [({loc: default_loc.contents, txt: "bs.obj"}, PStr [])]
   };
   (propsObjType, externalType)
@@ -1058,7 +1145,7 @@ let topStatementsMapper statementWrap => {
         switch fields {
         | [] => [Str.value Nonrecursive valueBindings]
         | fields =>
-          let (a, b) = propTypesShit fields;
+          let (a, b) = propTypesToActualTypes fields;
           [a, b, Str.value Nonrecursive valueBindings]
         }
       | _ => [Str.value Nonrecursive valueBindings]

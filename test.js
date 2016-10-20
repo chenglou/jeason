@@ -82,16 +82,6 @@ bla(a);
 class comp extends React.Component {
   // the following propTypes should generate some externals
   static propTypes = {
-    // name: React.PropTypes.string.isRequired,
-    // name2: React.PropTypes.string,
-    // className: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]).isRequired,
-    // className2: React.PropTypes.oneOfType([React.PropTypes.number.isRequired]).isRequired,
-    // onClick: React.PropTypes.oneOf(["foo"]),
-    // foo: React.PropTypes.shape({
-    //   foo: React.PropTypes.arrayOf(React.PropTypes.number.isRequired).isRequired,
-    // }),
-
-
     "string" : React.PropTypes.string,
     "bool" : React.PropTypes.bool,
     "number" : React.PropTypes.number,
@@ -128,7 +118,6 @@ class comp extends React.Component {
       "bar": React.PropTypes.arrayOf(React.PropTypes.string),
       "bar2": React.PropTypes.arrayOf(React.PropTypes.string.isRequired).isRequired,
     }).isRequired
-
   };
 
   state = {
