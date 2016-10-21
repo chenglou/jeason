@@ -1214,18 +1214,42 @@ and expressionMapper
       | Literal lit => literalMapper lit
       | Member member => memberMapper context::context member
       | This => Exp.ident (astHelperStrLid (Lident "this"))
-      | Logical {Logical.operator: operator, left, right} =>
-        let operatorReason =
-          switch operator {
-          | Logical.Or => "||"
-          | Logical.And => "&&"
-          };
-        Exp.apply
-          (Exp.ident (astHelperStrLid (Lident operatorReason)))
-          [
-            ("", expressionMapper context::context left),
-            ("", expressionMapper context::context right)
-          ]
+      | Logical {Logical.operator: operator, left: leftWrap, right: (_, right) as rightWrap} =>
+        switch operator {
+        | Logical.Or =>
+          Exp.apply
+            (Exp.ident (astHelperStrLid (Lident "||")))
+            [
+              ("", expressionMapper context::context leftWrap),
+              ("", expressionMapper context::context rightWrap)
+            ]
+        | Logical.And =>
+          /* common pattern: `show && <Foo />`. Transpile to `show ? <Foo /> : Js.null` */
+          switch right {
+          | JSXElement _ =>
+            Exp.match_
+              (expressionMapper context::context leftWrap)
+              [
+                {
+                  pc_lhs: Pat.construct (astHelperStrLid (Lident "true")) None,
+                  pc_guard: None,
+                  pc_rhs: expressionMapper context::context rightWrap
+                },
+                {
+                  pc_lhs: Pat.construct (astHelperStrLid (Lident "false")) None,
+                  pc_guard: None,
+                  pc_rhs: Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null"))
+                }
+              ]
+          | _ =>
+            Exp.apply
+              (Exp.ident (astHelperStrLid (Lident "&&")))
+              [
+                ("", expressionMapper context::context leftWrap),
+                ("", expressionMapper context::context rightWrap)
+              ]
+          }
+        }
       | JSXElement element => jsxElementMapper context::context element
       | Array {Array.elements: elements} =>
         elements |>

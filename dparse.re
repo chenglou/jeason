@@ -17,6 +17,8 @@ let bTop = 6.5;
 
 "asd";
 
+show ? a : b;
+
 let module PropTypes = ReactRe.PropTypes;
 
 a;
