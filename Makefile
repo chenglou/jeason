@@ -141,34 +141,15 @@ LINKER_FLAGS=$(BYTECODE_LINKER_FLAGS) $(SECTCREATE)
 
 # all: $(FLOWLIB) build-flow copy-flow-files
 all: build-flow
-all-ocp: build-flow-with-ocp copy-flow-files-ocp
 
 clean:
-	ocamlbuild -clean
+	rm -rf _build
 	rm -rf bin
 	rm -f hack/utils/get_build_id.gen.c
 	rm -f flow.odocl
 
-clean-ocp: clean
-	ocp-build clean
-	rm -f $(OCP_BUILD_FILES)
-
 build-flow: $(BUILT_OBJECT_FILES) $(FLOWLIB)
-	rebuild -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" -package compiler-libs.common src/main.native
-	# ocamlbuild  -no-links  $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.native
-
-%.ocp: %.ocp.fb scripts/utils.ml scripts/ocp_build_glob.ml
-	ocaml -I scripts -w -3 str.cma unix.cma scripts/ocp_build_glob.ml $(addsuffix .fb,$@) $@
-
-build-flow-with-ocp: $(OCP_BUILD_FILES) $(FLOWLIB) hack/utils/get_build_id.gen.c
-	[ -d _obuild ] || ocp-build init
-	ocp-build build flow
-	rm -f $(OCP_BUILD_FILES)
-
-build-flow-debug: $(BUILT_OBJECT_FILES) $(FLOWLIB)
-	ocamlbuild -lflags -custom -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" src/flow.d.byte
-	mkdir -p bin
-	cp _build/src/flow.d.byte bin/flow
+	rebuild -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" -package compiler-libs.common src/main.native
 
 %.h: $(subst _build/,,$@)
 	mkdir -p $(dir $@)
@@ -209,23 +190,12 @@ else
 	cp _build/src/flow.native bin/flow
 endif
 
-copy-flow-files-ocp: build-flow-with-ocp $(FLOWLIB) $(FILES_TO_COPY)
-	mkdir -p bin
-ifeq ($(OS), Linux)
-	objcopy --add-section flowlib=$(FLOWLIB) _obuild/flow/flow.asm bin/flow
-else
-	cp _obuild/flow/flow.asm bin/flow
-endif
-
 do-test:
 	./runtests.sh bin/flow
 	bin/flow check
 	./tool test
 
 test: build-flow copy-flow-files
-	${MAKE} do-test
-
-test-ocp: build-flow-with-ocp copy-flow-files-ocp
 	${MAKE} do-test
 
 js: $(BUILT_OBJECT_FILES)
@@ -255,7 +225,7 @@ js: $(BUILT_OBJECT_FILES)
 
 FORCE:
 
-.PHONY: all build-flow build-flow-with-ocp build-flow-debug FORCE
+.PHONY: all build-flow
 
 # This rule runs if any .ml or .mli file has been touched. It recursively calls
 # ocamldep to figure out all the modules that we use to build src/flow.ml
