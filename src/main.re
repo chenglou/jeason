@@ -67,8 +67,8 @@ let rec convertPropTypeType
         isForFunctionLabel::isForFunctionLabel
         wrappedByRequired::wrappedByRequired
         {pexp_desc} => {
-  let wrapIfNotRequired ident => {
-    let partialResult = {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: ident};
+  let wrapIfNotRequired attrs::attrs=[] ident => {
+    let partialResult = {ptyp_loc: default_loc.contents, ptyp_attributes: attrs, ptyp_desc: ident};
     if wrappedByRequired {
       partialResult
     } else if (isTopLevel && isForFunctionLabel) {
@@ -107,20 +107,53 @@ let rec convertPropTypeType
   );
   switch pexp_desc {
   | Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propNameThatsNotRequired} =>
-    let ident =
-      switch propNameThatsNotRequired {
-      | "string" => Lident "string"
-      | "bool" => Lident "boolean"
-      /* TODO: smart detection */
-      | "number" => Lident "int"
-      | "object_" => Lident "roughObjectTypeNotSupportedHere"
-      | "symbol" => Lident "symbolTypeNotSupportedHere"
-      | "any" => Ldot (Lident "Obj") "magic"
-      | "element" => Ldot (Lident "ReactRe") "reactElement"
-      | "func" => Lident "roughFunctionTypeNotSupportedHere"
-      | _ => Lident "cannotUnderstandPropTypeHere"
-      };
-    wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: ident} [])
+    switch propNameThatsNotRequired {
+    | "string" =>
+      wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident "string"} [])
+    | "bool" =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "Js") "boolean"} []
+      )
+    /* TODO: smart detection */
+    | "number" => wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident "int"} [])
+    | "object_" =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Lident "roughObjectTypeNotSupportedHere"} []
+      )
+    | "symbol" =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Lident "symbolTypeNotSupportedHere"} []
+      )
+    | "any" =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "Obj") "magic"} []
+      )
+    | "element" =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "reactElement"} []
+      )
+    | "func" =>
+      wrapIfNotRequired
+        attrs::[({loc: default_loc.contents, txt: "bs.meth"}, PStr [])]
+        (
+          Ptyp_arrow
+            ""
+            {
+              ptyp_loc: default_loc.contents,
+              ptyp_attributes: [],
+              ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+            }
+            {
+              ptyp_loc: default_loc.contents,
+              ptyp_attributes: [],
+              ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+            }
+        )
+    | _ =>
+      wrapIfNotRequired (
+        Ptyp_constr {loc: default_loc.contents, txt: Lident "cannotUnderstandPropTypeHere"} []
+      )
+    }
   | Pexp_apply
       {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propName}}
       [(_, expr)] =>
@@ -520,7 +553,10 @@ and functionMapper
             switch param {
             | Pattern.Identifier (_, {Identifier.name: name, _}) =>
               Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident name)) None) expr'
-            | _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
+            | Pattern.Object _
+            | Pattern.Array _
+            | Pattern.Assignment _
+            | Pattern.Expression _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
             }
         )
         bodyReason;
@@ -724,8 +760,8 @@ and statementMapper
     context::context
     ((_, statement): Parser_flow.Ast.Statement.t)
     :Parsetree.expression =>
-  Parser_flow.Ast.(
-    Parser_flow.Ast.Statement.(
+  Parser_flow.Ast.Statement.(
+    Parser_flow.Ast.(
       switch statement {
       | VariableDeclaration {VariableDeclaration.declarations: declarations, kind} =>
         /* this is the part that transforms non-top-level var declarations list (in a single var
@@ -749,11 +785,43 @@ and statementMapper
             Nonrecursive
             [parseTreeValueBinding pat::(Pat.var (astHelperStrLid name)) expr::expr]
             innerMostExpr
-        | Pattern.Object _
+        | Pattern.Object {Pattern.Object.properties: properties} =>
+          switch (properties, init) {
+          | (
+              [
+                Pattern.Object.Property (
+                  _,
+                  {
+                    Pattern.Object.Property.key:
+                      Pattern.Object.Property.Identifier (_, {Identifier.name: "PropTypes"})
+                  }
+                )
+              ],
+              Some (_, Expression.Identifier (_, {Identifier.name: "React"}))
+            ) =>
+            Exp.letmodule
+              (astHelperStrLid "PropTypes")
+              (Mod.ident (astHelperStrLid (Ldot (Lident "ReactRe") "PropTypes")))
+              innerMostExpr
+          | _ =>
+            Exp.let_
+              Nonrecursive
+              [
+                parseTreeValueBinding
+                  pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) expr::expr
+              ]
+              innerMostExpr
+          }
         | Pattern.Array _
         | Pattern.Assignment _
         | Pattern.Expression _ =>
-          Exp.constant (Const_string "variationDeclOtherCasesNotImplemented" None)
+          Exp.let_
+            Nonrecursive
+            [
+              parseTreeValueBinding
+                pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) expr::expr
+            ]
+            innerMostExpr
         }
       | Return {Return.argument: argument} =>
         /* TODO: warn against early return */
@@ -766,7 +834,7 @@ and statementMapper
         | None => result
         | Some expr => Exp.sequence result expr
         }
-      | Expression {Expression.expression: expression} =>
+      | Expression {Statement.Expression.expression: expression} =>
         switch context.terminalExpr {
         | None => expressionMapper context::context expression
         | Some expr => Exp.sequence (expressionMapper context::context expression) expr
@@ -1237,7 +1305,6 @@ let topStatementsMapper statementWrap => {
       statementWrap;
   switch pexp_desc {
   | Pexp_let _ valueBindings {pexp_desc, _} =>
-    let baseDeclarations = [Str.value Nonrecursive valueBindings];
     /* get some propTypes, generate externals and type decls, e.g. type props = ... */
     let extraDeclarations =
       switch valueBindings {
@@ -1304,10 +1371,22 @@ let topStatementsMapper statementWrap => {
           | _ => []
           };
         extraDeclarationsFromProps @ extraDeclarationsFromState
+      | [] => [Str.eval expMarker]
       | _ => []
       };
+    let baseDeclarations =
+      switch valueBindings {
+      /* strip `require` calls */
+      | [{pvb_expr: {pexp_desc: Pexp_apply {pexp_desc: Pexp_ident {txt: Lident "require"}} _}}] =>
+        []
+      | _ => [Str.value Nonrecursive valueBindings]
+      };
     extraDeclarations @ baseDeclarations
-  | Pexp_constant a => [Str.eval (Exp.constant a)]
+  | Pexp_constant a =>
+    switch a {
+    | Const_string "use strict" _ => []
+    | _ => [Str.eval (Exp.constant a)]
+    }
   | Pexp_ifthenelse cond consequent alternate => [
       Str.eval (Exp.ifthenelse cond consequent alternate)
     ]
@@ -1328,11 +1407,19 @@ let topStatementsMapper statementWrap => {
     ]
   | Pexp_ident ident => [Str.eval (Exp.ident ident)]
   | Pexp_apply expr lst => [Str.eval (Exp.apply expr lst)]
+  | Pexp_construct _ _ => []
+  | Pexp_letmodule ident modExpr _ => [
+      Str.module_ {
+        pmb_name: ident,
+        pmb_expr: modExpr,
+        pmb_attributes: [],
+        pmb_loc: default_loc.contents
+      }
+    ]
   | Pexp_record _ _
   | Pexp_match _ _
   | Pexp_try _ _
   | Pexp_tuple _
-  | Pexp_construct _ _
   | Pexp_variant _ _
   | Pexp_field _ _
   | Pexp_setfield _ _ _
@@ -1346,7 +1433,6 @@ let topStatementsMapper statementWrap => {
   | Pexp_new _
   | Pexp_setinstvar _ _
   | Pexp_override _
-  | Pexp_letmodule _ _ _
   | Pexp_assert _
   | Pexp_lazy _
   | Pexp_poly _ _

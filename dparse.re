@@ -3,6 +3,7 @@ type props =
   Js.t <
     inner : int,
     something : Js.null_undefined string,
+    onArchive : (unit => unit) [@bs.meth],
     children : Js.null_undefined React.reactElement
   >;
 
@@ -16,9 +17,11 @@ let bTop = 6.5;
 
 "asd";
 
+let module PropTypes = ReactRe.PropTypes;
+
 a;
 
-japplique ();
+let asd = japplique ();
 
 japplique2 a b;
 
@@ -46,8 +49,9 @@ let asd = createClass (
     val asd = "asd";
     val propInit = fun () => 1;
     method getInitialState () :state => {
-      let a = 5;
-      5();
+      let module PropTypes = ReactRe.PropTypes;
+      let {fuck1} = 5;
+      5 ();
       {"count": 0, "name": 1}
     };
     method haha foo => {
