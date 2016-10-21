@@ -45,6 +45,11 @@ let asd = createClass (
     };
     val asd = "asd";
     val propInit = fun () => 1;
+    method getInitialState () :state => {
+      let a = 5;
+      5();
+      {"count": 0, "name": 1}
+    };
     method haha foo => {
       let check = React.PropTypes.string.isRequired;
       oneCall1 ();

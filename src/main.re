@@ -174,7 +174,7 @@ let rec convertPropTypeType
                 )
               }
           )
-        | _ => assert false
+        | _ => []
         };
       wrapIfNotRequired (
         Ptyp_constr
@@ -273,7 +273,7 @@ let propTypesToActualTypes fields => {
         }
         {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: Ptyp_var "reactJsProps"}
   };
-  let asd =
+  let externalTypeInner =
     fields |> List.rev |>
     List.fold_left
       (
@@ -313,10 +313,145 @@ let propTypesToActualTypes fields => {
     pval_name: {loc: default_loc.contents, txt: "props"},
     pval_prim: [""],
     pval_loc: default_loc.contents,
-    pval_type: asd,
+    pval_type: externalTypeInner,
     pval_attributes: [({loc: default_loc.contents, txt: "bs.obj"}, PStr [])]
   };
   (propsObjType, externalType)
+};
+
+let attemptToGenerateStateRecord initialStateDeclaration => {
+  let rec innerMostExpr pexp_desc =>
+    switch pexp_desc {
+    | Pexp_extension (
+        {txt: "bs.obj"},
+        PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record lst _} _}]
+      ) =>
+      Some lst
+    | Pexp_let _ _ {pexp_desc}
+    | Pexp_sequence _ {pexp_desc}
+    | Pexp_constraint {pexp_desc} _ => innerMostExpr pexp_desc
+    | _ => None
+    };
+  let bailType = Str.type_ [
+    Type.mk
+      kind::Ptype_abstract
+      priv::Public
+      manifest::{
+        ptyp_loc: default_loc.contents,
+        ptyp_attributes: [],
+        ptyp_desc:
+          Ptyp_constr
+            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+            [
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc:
+                  Ptyp_object
+                    [
+                      (
+                        "cantAnalyzeComplexStateType",
+                        [],
+                        {
+                          ptyp_loc: default_loc.contents,
+                          ptyp_attributes: [],
+                          ptyp_desc:
+                            Ptyp_constr
+                              (astHelperStrLid (Lident "pleaseProvideTheShapeOfStateManually")) []
+                        }
+                      )
+                    ]
+                    Closed
+              }
+            ]
+      }
+      (astHelperStrLid "state")
+  ];
+  /* drill deeeeeply into the function AST to get the shape of the return value */
+  switch initialStateDeclaration {
+  | {
+      pcf_desc:
+        Pcf_method (
+          _,
+          _,
+          Cfk_concrete
+            _
+            {
+              pexp_desc:
+                Pexp_poly
+                  {
+                    pexp_desc:
+                      Pexp_fun
+                        _
+                        _
+                        _
+                        {
+                          pexp_desc:
+                            Pexp_constraint
+                              {
+                                pexp_desc:
+                                  /* Pexp_extension (
+                                       _,
+                                       PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record lst _} _}]
+                                     ) */
+                                  a
+                              }
+                              _
+                        }
+                  }
+                  None
+            }
+        )
+    } =>
+    switch (innerMostExpr a) {
+    | Some returnExpression =>
+      let fields =
+        returnExpression |>
+        List.map (
+          fun ({txt}, {pexp_desc}) => {
+            let label =
+              switch txt {
+              | Lident txt => txt
+              | _ => "cannotConvertStateKeyOver"
+              };
+            (
+              label,
+              [],
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc:
+                  Ptyp_constr (astHelperStrLid (Lident "pleaseFillTheTypeForThisKeyManually")) []
+              }
+            )
+          }
+        );
+      Str.type_ [
+        Type.mk
+          kind::Ptype_abstract
+          priv::Public
+          manifest::{
+            ptyp_loc: default_loc.contents,
+            ptyp_attributes: [],
+            ptyp_desc:
+              Ptyp_constr
+                {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+                [
+                  {
+                    ptyp_loc: default_loc.contents,
+                    ptyp_attributes: [],
+                    ptyp_desc: Ptyp_object fields Closed
+                  }
+                ]
+          }
+          (astHelperStrLid "state")
+      ]
+    | None => bailType
+    }
+  | _ =>
+    /* getInitialState too complex; just generate a dummy */
+    bailType
+  }
 };
 
 let rec statementBlockMapper
@@ -1102,56 +1237,76 @@ let topStatementsMapper statementWrap => {
       statementWrap;
   switch pexp_desc {
   | Pexp_let _ valueBindings {pexp_desc, _} =>
+    let baseDeclarations = [Str.value Nonrecursive valueBindings];
     /* get some propTypes, generate externals and type decls, e.g. type props = ... */
-    switch valueBindings {
-    | [
-        {
-          pvb_expr: {
-            pexp_desc:
-              Pexp_apply
-                {pexp_desc: Pexp_ident {txt: Ldot (Lident "ReactRe") "createClass"}, _}
-                [(_, {pexp_desc: Pexp_object {pcstr_fields}})]
-          }
-        }
-      ] =>
-      let propTypes =
-        pcstr_fields |>
-        List.filter (
-          fun {pcf_desc} =>
-            switch pcf_desc {
-            | Pcf_val ({txt: "propTypes"}, _, _) => true
-            | _ => false
-            }
-        );
-      switch propTypes {
+    let extraDeclarations =
+      switch valueBindings {
       | [
           {
-            pcf_desc:
-              Pcf_val (
-                _,
-                _,
-                Cfk_concrete
-                  _
-                  {
-                    pexp_desc:
-                      Pexp_extension (
-                        _,
-                        PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record fields _} _}]
-                      )
-                  }
-              )
+            pvb_expr: {
+              pexp_desc:
+                Pexp_apply
+                  {pexp_desc: Pexp_ident {txt: Ldot (Lident "ReactRe") "createClass"}, _}
+                  [(_, {pexp_desc: Pexp_object {pcstr_fields}})]
+            }
           }
         ] =>
-        switch fields {
-        | [] => [Str.value Nonrecursive valueBindings]
-        | fields =>
-          let (a, b) = propTypesToActualTypes fields;
-          [a, b, Str.value Nonrecursive valueBindings]
-        }
-      | _ => [Str.value Nonrecursive valueBindings]
-      }
-    | _ => [Str.eval expUnit]
-    }
+        let propTypes =
+          pcstr_fields |>
+          List.filter (
+            fun {pcf_desc} =>
+              switch pcf_desc {
+              | Pcf_val ({txt: "propTypes"}, _, _) => true
+              | _ => false
+              }
+          );
+        let extraDeclarationsFromProps =
+          switch propTypes {
+          | [
+              {
+                pcf_desc:
+                  Pcf_val (
+                    _,
+                    _,
+                    Cfk_concrete
+                      _
+                      {
+                        pexp_desc:
+                          Pexp_extension (
+                            _,
+                            PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record fields _} _}]
+                          )
+                      }
+                  )
+              }
+            ] =>
+            switch fields {
+            | [] => []
+            | fields =>
+              let (propsType, externalType) = propTypesToActualTypes fields;
+              [propsType, externalType]
+            }
+          | _ => []
+          };
+        /* same for state type */
+        let getInitialState =
+          pcstr_fields |>
+          List.filter (
+            fun {pcf_desc} =>
+              switch pcf_desc {
+              | Pcf_method ({txt: "getInitialState"}, _, _) => true
+              | _ => false
+              }
+          );
+        let extraDeclarationsFromState =
+          switch getInitialState {
+          | [initialStateDeclaration] => [attemptToGenerateStateRecord initialStateDeclaration]
+          | _ => []
+          };
+        extraDeclarationsFromProps @ extraDeclarationsFromState
+      | _ => []
+      };
+    extraDeclarations @ baseDeclarations
   | Pexp_constant a => [Str.eval (Exp.constant a)]
   | Pexp_ifthenelse cond consequent alternate => [
       Str.eval (Exp.ifthenelse cond consequent alternate)
