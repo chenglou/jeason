@@ -102,9 +102,8 @@ let rec convertPropTypeType
       }
     }
   };
-  let unsupported str => wrapIfNotRequired (
-    Ptyp_constr {loc: default_loc.contents, txt: Lident str} []
-  );
+  let unsupported str =>
+    wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident str} []);
   switch pexp_desc {
   | Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propNameThatsNotRequired} =>
     switch propNameThatsNotRequired {
@@ -273,26 +272,27 @@ let propTypesToActualTypes fields => {
           )
         }
     );
-  let propsObjType = Str.type_ [
-    Type.mk
-      kind::Ptype_abstract
-      priv::Public
-      manifest::{
-        ptyp_loc: default_loc.contents,
-        ptyp_attributes: [],
-        ptyp_desc:
-          Ptyp_constr
-            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
-            [
-              {
-                ptyp_loc: default_loc.contents,
-                ptyp_attributes: [],
-                ptyp_desc: Ptyp_object convertedFieldsForProps Closed
-              }
-            ]
-      }
-      (astHelperStrLid "props")
-  ];
+  let propsObjType =
+    Str.type_ [
+      Type.mk
+        kind::Ptype_abstract
+        priv::Public
+        manifest::{
+          ptyp_loc: default_loc.contents,
+          ptyp_attributes: [],
+          ptyp_desc:
+            Ptyp_constr
+              {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+              [
+                {
+                  ptyp_loc: default_loc.contents,
+                  ptyp_attributes: [],
+                  ptyp_desc: Ptyp_object convertedFieldsForProps Closed
+                }
+              ]
+        }
+        (astHelperStrLid "props")
+    ];
   let inner = {
     ptyp_loc: default_loc.contents,
     ptyp_attributes: [],
@@ -342,13 +342,14 @@ let propTypesToActualTypes fields => {
         }
       )
       inner;
-  let externalType = Str.primitive {
-    pval_name: {loc: default_loc.contents, txt: "props"},
-    pval_prim: [""],
-    pval_loc: default_loc.contents,
-    pval_type: externalTypeInner,
-    pval_attributes: [({loc: default_loc.contents, txt: "bs.obj"}, PStr [])]
-  };
+  let externalType =
+    Str.primitive {
+      pval_name: {loc: default_loc.contents, txt: "props"},
+      pval_prim: [""],
+      pval_loc: default_loc.contents,
+      pval_type: externalTypeInner,
+      pval_attributes: [({loc: default_loc.contents, txt: "bs.obj"}, PStr [])]
+    };
   (propsObjType, externalType)
 };
 
@@ -365,41 +366,43 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
     | Pexp_constraint {pexp_desc} _ => innerMostExpr pexp_desc
     | _ => None
     };
-  let bailType = Str.type_ [
-    Type.mk
-      kind::Ptype_abstract
-      priv::Public
-      manifest::{
-        ptyp_loc: default_loc.contents,
-        ptyp_attributes: [],
-        ptyp_desc:
-          Ptyp_constr
-            {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
-            [
-              {
-                ptyp_loc: default_loc.contents,
-                ptyp_attributes: [],
-                ptyp_desc:
-                  Ptyp_object
-                    [
-                      (
-                        "cantAnalyzeComplexStateType",
-                        [],
-                        {
-                          ptyp_loc: default_loc.contents,
-                          ptyp_attributes: [],
-                          ptyp_desc:
-                            Ptyp_constr
-                              (astHelperStrLid (Lident "pleaseProvideTheShapeOfStateManually")) []
-                        }
-                      )
-                    ]
-                    Closed
-              }
-            ]
-      }
-      (astHelperStrLid "state")
-  ];
+  let bailType =
+    Str.type_ [
+      Type.mk
+        kind::Ptype_abstract
+        priv::Public
+        manifest::{
+          ptyp_loc: default_loc.contents,
+          ptyp_attributes: [],
+          ptyp_desc:
+            Ptyp_constr
+              {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+              [
+                {
+                  ptyp_loc: default_loc.contents,
+                  ptyp_attributes: [],
+                  ptyp_desc:
+                    Ptyp_object
+                      [
+                        (
+                          "cantAnalyzeComplexStateType",
+                          [],
+                          {
+                            ptyp_loc: default_loc.contents,
+                            ptyp_attributes: [],
+                            ptyp_desc:
+                              Ptyp_constr
+                                (astHelperStrLid (Lident "pleaseProvideTheShapeOfStateManually"))
+                                []
+                          }
+                        )
+                      ]
+                      Closed
+                }
+              ]
+        }
+        (astHelperStrLid "state")
+    ];
   /* drill deeeeeply into the function AST to get the shape of the return value */
   switch initialStateDeclaration {
   | {
@@ -412,27 +415,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
             {
               pexp_desc:
                 Pexp_poly
-                  {
-                    pexp_desc:
-                      Pexp_fun
-                        _
-                        _
-                        _
-                        {
-                          pexp_desc:
-                            Pexp_constraint
-                              {
-                                pexp_desc:
-                                  /* Pexp_extension (
-                                       _,
-                                       PStr [{pstr_desc: Pstr_eval {pexp_desc: Pexp_record lst _} _}]
-                                     ) */
-                                  a
-                              }
-                              _
-                        }
-                  }
-                  None
+                  {pexp_desc: Pexp_fun _ _ _ {pexp_desc: Pexp_constraint {pexp_desc: a} _}} None
             }
         )
     } =>
@@ -768,7 +751,8 @@ and statementMapper
            declaration) from js to like, let with a tuple or something in reason */
         /* TODO: actually do this lol */
         ignore kind;
-        let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) = List.hd declarations;
+        let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) =
+          List.hd declarations;
         let expr =
           switch init {
           | None => Exp.construct (astHelperStrLid (Lident "None")) None
@@ -904,6 +888,24 @@ and statementMapper
           let context = {...context, insideReactCreateClass: true};
           let createClassSpec =
             body |>
+            /* filter out "props" since we already use propTypes */
+            List.filter (
+              fun property =>
+                switch property {
+                | Class.Body.Property (
+                    _,
+                    {
+                      Class.Property.key:
+                        Expression.Object.Property.Identifier (_, {Identifier.name: "props", _}),
+                      value,
+                      typeAnnotation,
+                      static
+                    }
+                  ) =>
+                  false
+                | _ => true
+                }
+            ) |>
             List.map (
               fun property =>
                 Parser_flow.Ast.(
@@ -1295,9 +1297,44 @@ and expressionMapper
             ("", expressionMapper context::context left),
             ("", expressionMapper context::context right)
           ]
+      | Assignment {Assignment.operator: operator, left, right} =>
+        /* let innerMostExpr =
+          switch context.terminalExpr {
+          | None => expUnit
+          | Some expr => expr
+          }; */
+        Exp.apply
+          (Exp.ident (astHelperStrLid (Lident "#=")))
+          [
+            /* ("", expressionMapper context::context left), */
+            ("", Exp.ident (astHelperStrLid (Lident "wtfisMe"))),
+            ("", expressionMapper context::context right)
+          ]
+      /* Exp.let_
+         Nonrecursive
+         [
+           parseTreeValueBinding
+             pat::(Pat.constant (Const_string "wtfIsThis" None))
+             expr::(expressionMapper context::context right)
+         ]
+         innerMostExpr */
+      /* switch operator {
+         | Assignment.Assign => (??)
+         | Assignment.PlusAssign => (??)
+         | Assignment.MinusAssign => (??)
+         | Assignment.MultAssign => (??)
+         | Assignment.ExpAssign => (??)
+         | Assignment.DivAssign => (??)
+         | Assignment.ModAssign => (??)
+         | Assignment.LShiftAssign => (??)
+         | Assignment.RShiftAssign => (??)
+         | Assignment.RShift3Assign => (??)
+         | Assignment.BitOrAssign => (??)
+         | Assignment.BitXorAssign => (??)
+         | Assignment.BitAndAssign => (??)
+         } */
       | Sequence _
       | Unary _
-      | Assignment _
       | Update _
       | Conditional _
       | New _
