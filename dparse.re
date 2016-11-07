@@ -69,7 +69,7 @@ let asd =
         oneCall3 ();
         let bInner a => 6;
         let cInner = 7 + 1;
-        if cond {b};
+        if (not conda) {b};
         this##leThis##leThat this##leObj##laObj;
         (foo.bar ()).oneCall4 ()
       };

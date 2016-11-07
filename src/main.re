@@ -1089,26 +1089,22 @@ and expressionMapper
       | ArrowFunction functionWrap
       | Function functionWrap => functionMapper context::context returnType::None functionWrap
       | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
-        let processArguments arguments => {
-          let argumentsReason =
-            arguments |>
-            List.map (
-              fun argument =>
-                switch argument {
-                | Expression e => ("", expressionMapper context::context e)
-                | Spread (_, _) => (
-                    "",
-                    Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
-                  )
-                }
-            );
+        let argumentsIntoReasonArguments arguments =>
+          arguments |>
+          List.map (
+            fun argument =>
+              switch argument {
+              | Expression e => expressionMapper context::context e
+              | Spread (_, _) => Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+              }
+          );
+        let processArguments arguments =>
           /* see Expression.Function above: */
           /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
-          switch arguments {
+          switch (argumentsIntoReasonArguments arguments) {
           | [] => [("", expUnit)]
-          | oneArgOrMore => argumentsReason
-          }
-        };
+          | oneArgOrMore => oneArgOrMore |> List.map (fun arg => ("", arg))
+          };
         switch (callee, arguments) {
         | (
             Member {
@@ -1209,6 +1205,13 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "setState")))
             [("", Exp.ident (astHelperStrLid (Lident "this"))), ...processArguments arguments]
+        | (Identifier (_, {Identifier.name: "cx"}), arguments) =>
+          /* cx is treated differntly; facebook-specific */
+          /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
+          Exp.apply
+            (Exp.ident (astHelperStrLid (Ldot (Lident "CxRe") "cxRe")))
+            [("", Exp.array (argumentsIntoReasonArguments arguments))]
+        /* (processArguments arguments) */
         | (caller, arguments) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
@@ -1297,19 +1300,31 @@ and expressionMapper
             ("", expressionMapper context::context left),
             ("", expressionMapper context::context right)
           ]
-      | Assignment {Assignment.operator: operator, left, right} =>
+      | Assignment {Assignment.operator: operator, left: (_, left), right} =>
         /* let innerMostExpr =
-          switch context.terminalExpr {
-          | None => expUnit
-          | Some expr => expr
-          }; */
-        Exp.apply
-          (Exp.ident (astHelperStrLid (Lident "#=")))
-          [
-            /* ("", expressionMapper context::context left), */
-            ("", Exp.ident (astHelperStrLid (Lident "wtfisMe"))),
-            ("", expressionMapper context::context right)
-          ]
+           switch context.terminalExpr {
+           | None => expUnit
+           | Some expr => expr
+           }; */
+        switch left {
+        | Pattern.Expression (
+            _,
+            Member {
+              Member._object: (_, Identifier (_, {Identifier.name: "module"})),
+              property: Member.PropertyIdentifier (_, {Identifier.name: "exports"})
+            }
+          ) =>
+          /* module.exports is added naturally by BuckleScript. We don't need any translation from JS. */
+          expUnit
+        | _ =>
+          Exp.apply
+            (Exp.ident (astHelperStrLid (Lident "#=")))
+            [
+              /* ("", expressionMapper context::context left), */
+              ("", Exp.ident (astHelperStrLid (Lident "wtfisMe"))),
+              ("", expressionMapper context::context right)
+            ]
+        }
       /* Exp.let_
          Nonrecursive
          [
@@ -1333,8 +1348,29 @@ and expressionMapper
          | Assignment.BitXorAssign => (??)
          | Assignment.BitAndAssign => (??)
          } */
+      | Unary {Unary.operator: operator, prefix, argument: (_, argument) as argumentWrap} =>
+        switch operator {
+        | Unary.Not =>
+          switch argument {
+          | Unary {Unary.operator: Unary.Not, argument: innerArgument} =>
+            /* !! is a js idiom for casting to boolean */
+            Exp.apply
+              (Exp.ident (astHelperStrLid (Lident "pleaseWriteAIsTruthyFunction")))
+              [("", expressionMapper context::context innerArgument)]
+          | _ =>
+            Exp.apply
+              (Exp.ident (astHelperStrLid (Lident "not")))
+              [("", expressionMapper context::context argumentWrap)]
+          }
+        | Unary.Minus
+        | Unary.Plus
+        | Unary.BitNot
+        | Unary.Typeof
+        | Unary.Void
+        | Unary.Delete
+        | Unary.Await => expMarker
+        }
       | Sequence _
-      | Unary _
       | Update _
       | Conditional _
       | New _
@@ -1518,30 +1554,33 @@ let topStatementsMapper statementWrap => {
   }
 };
 
-let () = {
-  let parse_options =
-    Some Parser_env.{
-           /**
-            * Always parse ES proposal syntax. The user-facing config option to
-            * ignore/warn/enable them is handled during inference so that a clean error
-            * can be surfaced (rather than a more cryptic parse error).
-            */
-           esproposal_class_instance_fields: true,
-           esproposal_class_static_fields: true,
-           esproposal_decorators: true,
-           esproposal_export_star_as: true,
-           types: true,
-           use_strict: false
-         };
-  let file = "test.js";
-  let content = Sys_utils.cat file;
-  let (ast, _) =
-    Parser_flow.program_file
-      fail::false parse_options::parse_options content (Some (Loc.SourceFile file));
-  let (_, statements, _) = ast;
-  output_string stdout Config.ast_impl_magic_number;
-  output_value stdout file;
-  let result: Parsetree.structure =
-    statements |> List.map (fun statementWrap => topStatementsMapper statementWrap) |> List.concat;
-  output_value stdout result
-};
+let () =
+  try {
+    let file = Sys.argv.(1);
+    let parse_options =
+      Some Parser_env.{
+             /**
+              * Always parse ES proposal syntax. The user-facing config option to
+              * ignore/warn/enable them is handled during inference so that a clean error
+              * can be surfaced (rather than a more cryptic parse error).
+              */
+             esproposal_class_instance_fields: true,
+             esproposal_class_static_fields: true,
+             esproposal_decorators: true,
+             esproposal_export_star_as: true,
+             types: true,
+             use_strict: false
+           };
+    let content = Sys_utils.cat file;
+    let (ast, _) =
+      Parser_flow.program_file
+        fail::false parse_options::parse_options content (Some (Loc.SourceFile file));
+    let (_, statements, _) = ast;
+    output_string stdout Config.ast_impl_magic_number;
+    output_value stdout file;
+    let result: Parsetree.structure =
+      statements |> List.map (fun statementWrap => topStatementsMapper statementWrap) |> List.concat;
+    output_value stdout result
+  } {
+  | Invalid_argument _ => raise (Invalid_argument "Please provide a the JS file to convert over.")
+  };
