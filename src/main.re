@@ -55,6 +55,18 @@ let listToListAst lst => {
   }
 };
 
+/* TODO: turn foo_bar into foo_bar_ */
+let correctIdentifier ident => {
+  /* ocaml/reason identifiers need to be lower-cased (uppercase reserved for variants constructors, modules, etc.) */
+  let correctedName = String.capitalize ident == ident ? "_" ^ ident : ident;
+  /* correct other cases where the js name is a reserved ocaml/reason keyword */
+  switch correctedName {
+  | "object" => "object_"
+  | "type" => "type_"
+  | n => n
+  }
+};
+
 type context = {
   terminalExpr: option Parsetree.expression,
   insideReactCreateClass: bool,
@@ -564,7 +576,7 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
          will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
          numbers thinking you're holding true/false */
       /* boolean ? Exp. */
-      Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false")))
+      Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false_")))
     | Null => Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null"))
     | Number n =>
       let intN = int_of_float n;
@@ -589,7 +601,22 @@ and jsxElementMapper
   Parser_flow.Ast.JSX.(
     switch name {
     | Identifier (_, {Identifier.name: name}) =>
-      let partialArguments =
+      let jsxPropHasHyphen =
+        attributes |>
+        List.exists (
+          fun attr =>
+            switch attr {
+            | Opening.Attribute (
+                _,
+                {Attribute.name: Attribute.Identifier (_, {Identifier.name: name})}
+              ) =>
+              String.contains name '-'
+            | _ => false
+            }
+        );
+      let childrenReact =
+        children |> List.map (fun child => jsxChildMapper context::context child) |> keepSome;
+      let constructRecordOrLabels f =>
         attributes |>
         List.map (
           fun attr =>
@@ -609,26 +636,47 @@ and jsxElementMapper
                   }
                 };
               switch name {
-              | Attribute.Identifier (_, {Identifier.name: name}) => (name, valueReason)
+              | Attribute.Identifier (_, {Identifier.name: name}) => (f name, valueReason)
               | Attribute.NamespacedName _ => (
-                  "NamespacedName",
+                  f "NamespacedName",
                   Exp.constant (Const_string "notImeplementedYet" None)
                 )
               }
             | Opening.SpreadAttribute _ => (
-                "spreadAttrbute",
+                f "spreadAttrbute",
                 Exp.constant (Const_string "notImeplementedYet" None)
               )
             }
         );
-      /* add children */
-      let lastArgument =
-        children |> List.map (fun child => jsxChildMapper context::context child) |> keepSome;
-      let arguments = partialArguments @ [("", listToListAst lastArgument)];
-      Exp.apply
-        attrs::[(astHelperStrLid "JSX", PStr [])]
-        (Exp.ident (astHelperStrLid (Lident name)))
-        arguments
+      if jsxPropHasHyphen {
+        /* if there's a hyphen (e.g. aria-label) then we can't transform it into a jsx function label (invalid syntax). We'll
+           have to take a shortcut and use a bs.obj instead */
+        let jsObj =
+          Exp.extension (
+            astHelperStrLid "bs.obj",
+            PStr [
+              Str.eval (
+                Exp.record
+                  (constructRecordOrLabels (fun name => astHelperStrLid (Lident name))) None
+              )
+            ]
+          );
+        Exp.apply
+          (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createElement")))
+          [
+            ("", Exp.ident (astHelperStrLid (Lident name))),
+            ("", jsObj),
+            ("", Exp.array childrenReact)
+          ]
+      } else {
+        let partialArguments = constructRecordOrLabels (fun name => name);
+        /* add children */
+        let arguments = partialArguments @ [("", listToListAst childrenReact)];
+        Exp.apply
+          attrs::[(astHelperStrLid "JSX", PStr [])]
+          (Exp.ident (astHelperStrLid (Lident name)))
+          arguments
+      }
     | MemberExpression (_, {MemberExpression._object: _object, property}) =>
       Exp.constant (Const_string "complexJSXYet" None)
     | NamespacedName _ => Exp.constant (Const_string "noNameSpaceJSXYet" None)
@@ -709,7 +757,7 @@ and memberMapper
     let propertyReason =
       switch property {
       | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-        Exp.ident (astHelperStrLid (Lident name))
+        Exp.ident (astHelperStrLid (Lident (correctIdentifier name)))
       | Member.PropertyExpression expr => expressionMapper context::context expr
       };
     let left = expressionMapper context::context objectWrap;
@@ -724,7 +772,11 @@ and memberMapper
           (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "ReactRe") "PropTypes") "isRequired")))
           [("", expressionMapper context::context objectWrap)]
       | actualPropName =>
-        Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "ReactRe") "PropTypes") actualPropName))
+        Exp.ident (
+          astHelperStrLid (
+            Ldot (Ldot (Lident "ReactRe") "PropTypes") (correctIdentifier actualPropName)
+          )
+        )
       }
     | Member.PropertyExpression expr => expressionMapper context::context expr
     }
@@ -1215,25 +1267,29 @@ and expressionMapper
         | (caller, arguments) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
-      | Identifier (_, {Identifier.name: name}) => Exp.ident (astHelperStrLid (Lident name))
+      | Identifier (_, {Identifier.name: name}) =>
+        Exp.ident (astHelperStrLid (Lident (correctIdentifier name)))
       | Literal lit => literalMapper lit
       | Member member => memberMapper context::context member
       | This => Exp.ident (astHelperStrLid (Lident "this"))
       | Logical {Logical.operator: operator, left: leftWrap, right: (_, right) as rightWrap} =>
+        /* warning: BuckleScript boolean and js boolean aren't the same! */
+        let toBool expr =>
+          Exp.apply (Exp.ident (astHelperStrLid (Ldot (Lident "Js") "to_bool"))) [("", expr)];
         switch operator {
         | Logical.Or =>
           Exp.apply
             (Exp.ident (astHelperStrLid (Lident "||")))
             [
-              ("", expressionMapper context::context leftWrap),
-              ("", expressionMapper context::context rightWrap)
+              ("", toBool (expressionMapper context::context leftWrap)),
+              ("", toBool (expressionMapper context::context rightWrap))
             ]
         | Logical.And =>
           /* common pattern: `show && <Foo />`. Transpile to `show ? <Foo /> : Js.null` */
           switch right {
           | JSXElement _ =>
             Exp.match_
-              (expressionMapper context::context leftWrap)
+              (toBool (expressionMapper context::context leftWrap))
               [
                 {
                   pc_lhs: Pat.construct (astHelperStrLid (Lident "true")) None,
@@ -1250,8 +1306,8 @@ and expressionMapper
             Exp.apply
               (Exp.ident (astHelperStrLid (Lident "&&")))
               [
-                ("", expressionMapper context::context leftWrap),
-                ("", expressionMapper context::context rightWrap)
+                ("", toBool (expressionMapper context::context leftWrap)),
+                ("", toBool (expressionMapper context::context rightWrap))
               ]
           }
         }
@@ -1317,37 +1373,19 @@ and expressionMapper
           /* module.exports is added naturally by BuckleScript. We don't need any translation from JS. */
           expUnit
         | _ =>
+          /* TODO: this is redundant with what's above */
+          let leftReason =
+            switch left {
+            | Pattern.Expression expr => expressionMapper context::context expr
+            | Pattern.Object _
+            | Pattern.Array _
+            | Pattern.Assignment _
+            | Pattern.Identifier _ => expMarker
+            };
           Exp.apply
             (Exp.ident (astHelperStrLid (Lident "#=")))
-            [
-              /* ("", expressionMapper context::context left), */
-              ("", Exp.ident (astHelperStrLid (Lident "wtfisMe"))),
-              ("", expressionMapper context::context right)
-            ]
+            [("", leftReason), ("", expressionMapper context::context right)]
         }
-      /* Exp.let_
-         Nonrecursive
-         [
-           parseTreeValueBinding
-             pat::(Pat.constant (Const_string "wtfIsThis" None))
-             expr::(expressionMapper context::context right)
-         ]
-         innerMostExpr */
-      /* switch operator {
-         | Assignment.Assign => (??)
-         | Assignment.PlusAssign => (??)
-         | Assignment.MinusAssign => (??)
-         | Assignment.MultAssign => (??)
-         | Assignment.ExpAssign => (??)
-         | Assignment.DivAssign => (??)
-         | Assignment.ModAssign => (??)
-         | Assignment.LShiftAssign => (??)
-         | Assignment.RShiftAssign => (??)
-         | Assignment.RShift3Assign => (??)
-         | Assignment.BitOrAssign => (??)
-         | Assignment.BitXorAssign => (??)
-         | Assignment.BitAndAssign => (??)
-         } */
       | Unary {Unary.operator: operator, prefix, argument: (_, argument) as argumentWrap} =>
         switch operator {
         | Unary.Not =>
@@ -1368,11 +1406,25 @@ and expressionMapper
         | Unary.Typeof
         | Unary.Void
         | Unary.Delete
-        | Unary.Await => expMarker
+        | Unary.Await => Exp.constant (Const_string "unaryPlaceholder" None)
         }
+      | Conditional {Conditional.test: test, consequent, alternate} =>
+        Exp.match_
+          (expressionMapper context::context test)
+          [
+            {
+              pc_lhs: Pat.construct (astHelperStrLid (Lident "true")) None,
+              pc_guard: None,
+              pc_rhs: expressionMapper context::context consequent
+            },
+            {
+              pc_lhs: Pat.construct (astHelperStrLid (Lident "false")) None,
+              pc_guard: None,
+              pc_rhs: expressionMapper context::context alternate
+            }
+          ]
       | Sequence _
       | Update _
-      | Conditional _
       | New _
       | Yield _
       | Comprehension _
