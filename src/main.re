@@ -172,10 +172,10 @@ let rec convertPropTypeType
     | "isRequired" =>
       convertPropTypeType
         isTopLevel::false isForFunctionLabel::isForFunctionLabel wrappedByRequired::true expr
-    | "oneOfType" => unsupported "oneOfTypeUnSupportedUseAVariant"
-    | "oneOf" => unsupported "oneOfUnSupportedUseAVariant"
-    | "objectOf" => unsupported "objectOfUnSupportedUseAVariant"
-    | "instanceOf" => unsupported "instanceOfUnSupportedUseAVariant"
+    | "oneOfType" => unsupported "oneOfTypeUnSupported"
+    | "oneOf" => unsupported "oneOfUnSupported"
+    | "objectOf" => unsupported "objectOfUnSupported"
+    | "instanceOf" => unsupported "instanceOfUnSupported"
     | "arrayOf" =>
       wrapIfNotRequired (
         Ptyp_constr
@@ -798,11 +798,10 @@ and statementMapper
   Parser_flow.Ast.Statement.(
     Parser_flow.Ast.(
       switch statement {
-      | VariableDeclaration {VariableDeclaration.declarations: declarations, kind} =>
+      | VariableDeclaration {VariableDeclaration.declarations: declarations} =>
         /* this is the part that transforms non-top-level var declarations list (in a single var
            declaration) from js to like, let with a tuple or something in reason */
         /* TODO: actually do this lol */
-        ignore kind;
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) =
           List.hd declarations;
         let expr =
@@ -817,9 +816,35 @@ and statementMapper
           };
         switch id {
         | Pattern.Identifier (_, {Identifier.name: name, _}) =>
+          let patternName =
+            switch init {
+            | Some (
+                _,
+                Expression.Call {
+                  Expression.Call.callee: (
+                    _,
+                    Expression.Member {
+                      Expression.Member._object: (
+                        _,
+                        Expression.Identifier (_, {Identifier.name: "React", _})
+                      ),
+                      property:
+                        Expression.Member.PropertyIdentifier (
+                          _,
+                          {Identifier.name: "createClass", _}
+                        ),
+                      _
+                    }
+                  )
+                }
+              ) =>
+              /* every react component must be called comp so that we could do Foo.comp on it for JSX */
+              "comp"
+            | _ => name
+            };
           Exp.let_
             Nonrecursive
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid name)) expr::expr]
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid patternName)) expr::expr]
             innerMostExpr
         | Pattern.Object {Pattern.Object.properties: properties} =>
           switch (properties, init) {
@@ -1095,7 +1120,8 @@ and statementMapper
             };
           Exp.let_
             Nonrecursive
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid className)) expr::expr]
+            /* every react component must be called comp so that we could do Foo.comp on it for JSX */
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid "comp")) expr::expr]
             terminal
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
