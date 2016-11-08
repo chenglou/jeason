@@ -139,14 +139,12 @@ BYTECODE_LINKER_FLAGS=$(NATIVE_OBJECT_FILES) $(NATIVE_LIB_OPTS) $(EXTRA_LIB_OPTS
 LINKER_FLAGS=$(BYTECODE_LINKER_FLAGS) $(SECTCREATE)
 
 
-# all: $(FLOWLIB) build-flow copy-flow-files
 all: build-flow
 
 clean:
 	rm -rf _build
 	rm -rf bin
 	rm -f hack/utils/get_build_id.gen.c
-	rm -f flow.odocl
 
 build-flow: $(BUILT_OBJECT_FILES) $(FLOWLIB)
 	rebuild -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" -package compiler-libs.common src/main.native
@@ -182,48 +180,6 @@ ifeq ($(OS), Darwin)
 	rm -f _obuild/flow/flow.byte _obuild/flow/flow.asm
 endif
 
-copy-flow-files: build-flow $(FILES_TO_COPY)
-	mkdir -p bin
-ifeq ($(OS), Linux)
-	objcopy --add-section flowlib=$(FLOWLIB) _build/src/flow.native bin/flow
-else
-	cp _build/src/flow.native bin/flow
-endif
-
-do-test:
-	./runtests.sh bin/flow
-	bin/flow check
-	./tool test
-
-test: build-flow copy-flow-files
-	${MAKE} do-test
-
 FORCE:
 
 .PHONY: all build-flow
-
-# This rule runs if any .ml or .mli file has been touched. It recursively calls
-# ocamldep to figure out all the modules that we use to build src/flow.ml
-flow.odocl: $(shell find . -name "*.ml" -o -name "*.mli")
-	echo "src/flow.ml" > deps
-	echo "" > last_deps
-	until diff deps last_deps > /dev/null; do \
-		cp deps last_deps; \
-		cat deps \
-		  | xargs ocamldep -one-line $(INCLUDE_OPTS) \
-		  | grep -o "[a-zA-Z0-9/_-]*\.cm[xo]" \
-		  | sed "s/\.cm[xo]$$/.ml/" \
-		  | sort -u > temp_deps; \
-		mv temp_deps deps; \
-	done
-	# For some reason these two AST files cause ocamldoc to get stuck
-	cat deps \
-		| grep -v "src/parser/spider_monkey_ast.ml" \
-		| grep -v "src/dts/dts_ast.ml" \
-		| sed "s/\.ml$$//" > $@
-	rm -f deps last_deps temp_deps
-
-flow.docdir/index.html: flow.odocl
-	ocamlbuild $(INCLUDE_OPTS) -use-ocamlfind flow.docdir/index.html
-
-doc: flow.docdir/index.html
