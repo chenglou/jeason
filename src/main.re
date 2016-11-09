@@ -8,12 +8,57 @@ open Parsetree;
 open Longident;
 
 /* helpers */
-let astHelperStrLid a => {loc: default_loc.contents, txt: a};
+/* TODO: turn foo_bar into foo_bar_ */
+let correctIdentifier ident => {
+  let rec stripLeadingUnderscores s =>
+    if (String.length s == 0) {
+      s
+    } else if (s.[0] == '_') {
+      stripLeadingUnderscores (String.sub s 1 (String.length s - 1))
+    } else {
+      s
+    };
+  /* ocaml/reason identifiers need to be lower-cased (uppercase reserved for variants constructors, modules, etc.) */
+  if (ident == "") {
+    ident
+  } else {
+    /* foo => foo
+       Foo => _Foo
+       _foo => foo
+       _foo_bar => foo_bar_ */
+    let correctedName = stripLeadingUnderscores ident;
+    let correctedName = String.contains correctedName '_' ? correctedName ^ "_" : correctedName;
+    let correctedName =
+      String.capitalize correctedName == correctedName ? "_" ^ correctedName : correctedName;
+    /* correct other cases where the js name is a reserved ocaml/reason keyword */
+    switch correctedName {
+    | "object" => "object_"
+    | "type" => "type_"
+    | n => n
+    }
+  }
+};
 
-let expUnit = Exp.construct (astHelperStrLid (Lident "()")) None;
+let astHelperStrLidStr correct::correct=true a => {
+  loc: default_loc.contents,
+  txt: correct ? correctIdentifier a : a
+};
+
+let astHelperStrLidIdent correct::correct=true a =>
+  switch a {
+  | [] => raise (Invalid_argument "identifier is empty.")
+  | _ =>
+    let inner = Lident (correct ? correctIdentifier (List.hd a) : List.hd a);
+    let res =
+      List.tl a |>
+      List.fold_left (fun acc curr => Ldot acc (correct ? correctIdentifier curr : curr)) inner;
+    {loc: default_loc.contents, txt: res}
+  };
+
+let expUnit = Exp.construct (astHelperStrLidIdent correct::false ["()"]) None;
 
 /* using this as a convenient placeholder output, for checking whether I've matched the js ast correctly */
-let expMarker = Exp.ident (astHelperStrLid (Lident "marker"));
+let expMarker = Exp.ident (astHelperStrLidIdent ["marker"]);
 
 let parseTreeValueBinding pat::pat expr::expr => {
   pvb_pat: pat,
@@ -40,7 +85,7 @@ let keepSome lst =>
   );
 
 let listToListAst lst => {
-  let nullList = Exp.construct (astHelperStrLid (Lident "[]")) None;
+  let nullList = Exp.construct (astHelperStrLidIdent correct::false ["[]"]) None;
   /* we transform js array to BS array, except in the case of jsx which takes a reason list instead */
   switch lst {
   | [] => nullList
@@ -49,21 +94,10 @@ let listToListAst lst => {
     List.fold_left
       (
         fun accumExp expr =>
-          Exp.construct (astHelperStrLid (Lident "::")) (Some (Exp.tuple [expr, accumExp]))
+          Exp.construct
+            (astHelperStrLidIdent correct::false ["::"]) (Some (Exp.tuple [expr, accumExp]))
       )
       nullList
-  }
-};
-
-/* TODO: turn foo_bar into foo_bar_ */
-let correctIdentifier ident => {
-  /* ocaml/reason identifiers need to be lower-cased (uppercase reserved for variants constructors, modules, etc.) */
-  let correctedName = String.capitalize ident == ident ? "_" ^ ident : ident;
-  /* correct other cases where the js name is a reserved ocaml/reason keyword */
-  switch correctedName {
-  | "object" => "object_"
-  | "type" => "type_"
-  | n => n
   }
 };
 
@@ -92,7 +126,7 @@ let rec convertPropTypeType
              prepend the name of the label with a question mark (see propTypesToActualTypes) and have the
              special *predef* node */
           Ptyp_constr
-            {loc: default_loc.contents, txt: Ldot (Lident "*predef*") "option"}
+            (astHelperStrLidIdent correct::false ["*predef*", "option"])
             [
               {
                 ptyp_loc: default_loc.contents,
@@ -114,56 +148,56 @@ let rec convertPropTypeType
       }
     }
   };
-  let unsupported str =>
-    wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident str} []);
+  let unsupported str => wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent [str]) []);
   switch pexp_desc {
   | Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propNameThatsNotRequired} =>
     switch propNameThatsNotRequired {
-    | "string" =>
-      wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident "string"} [])
+    | "string" => wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["string"]) [])
     | "bool" =>
-      wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "Js") "boolean"} []
-      )
+      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent correct::false ["Js", "boolean"]) [])
     /* TODO: smart detection */
-    | "number" => wrapIfNotRequired (Ptyp_constr {loc: default_loc.contents, txt: Lident "int"} [])
+    | "number" => wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["int"]) [])
+    | "node" => wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["nodeTypeNotSupported"]) [])
     | "object_" =>
       wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Lident "roughObjectTypeNotSupportedHere"} []
+        Ptyp_constr
+          (astHelperStrLidIdent correct::false ["Js", "t"])
+          [
+            {
+              ptyp_loc: default_loc.contents,
+              ptyp_attributes: [],
+              ptyp_desc:
+                Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) []
+            }
+          ]
       )
     | "symbol" =>
-      wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Lident "symbolTypeNotSupportedHere"} []
-      )
+      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["symbolTypeNotSupportedHere"]) [])
     | "any" =>
-      wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "Obj") "magic"} []
-      )
+      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) [])
     | "element" =>
       wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Ldot (Lident "ReactRe") "reactElement"} []
+        Ptyp_constr (astHelperStrLidIdent correct::false ["ReactRe", "reactElement"]) []
       )
     | "func" =>
       wrapIfNotRequired
-        attrs::[({loc: default_loc.contents, txt: "bs.meth"}, PStr [])]
+        attrs::[(astHelperStrLidStr "bs.meth", PStr [])]
         (
           Ptyp_arrow
             ""
             {
               ptyp_loc: default_loc.contents,
               ptyp_attributes: [],
-              ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+              ptyp_desc: Ptyp_constr (astHelperStrLidIdent ["unit"]) []
             }
             {
               ptyp_loc: default_loc.contents,
               ptyp_attributes: [],
-              ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+              ptyp_desc: Ptyp_constr (astHelperStrLidIdent ["unit"]) []
             }
         )
     | _ =>
-      wrapIfNotRequired (
-        Ptyp_constr {loc: default_loc.contents, txt: Lident "cannotUnderstandPropTypeHere"} []
-      )
+      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["cannotUnderstandPropTypeHere"]) [])
     }
   | Pexp_apply
       {pexp_desc: Pexp_ident {txt: Ldot (Ldot (Lident "ReactRe") "PropTypes") propName}}
@@ -179,7 +213,7 @@ let rec convertPropTypeType
     | "arrayOf" =>
       wrapIfNotRequired (
         Ptyp_constr
-          {loc: default_loc.contents, txt: Lident "array"}
+          (astHelperStrLidIdent ["array"])
           [
             convertPropTypeType
               isTopLevel::false
@@ -212,8 +246,7 @@ let rec convertPropTypeType
                     ptyp_loc: default_loc.contents,
                     ptyp_attributes: [],
                     ptyp_desc:
-                      Ptyp_constr
-                        {loc: default_loc.contents, txt: Lident "forComplexPropTypesObjectKey"} []
+                      Ptyp_constr (astHelperStrLidIdent ["forComplexPropTypesObjectKey"]) []
                   }
                 )
               }
@@ -222,7 +255,7 @@ let rec convertPropTypeType
         };
       wrapIfNotRequired (
         Ptyp_constr
-          {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
+          (astHelperStrLidIdent correct::false ["Js", "t"])
           [
             {
               ptyp_loc: default_loc.contents,
@@ -303,7 +336,7 @@ let propTypesToActualTypes fields => {
                 }
               ]
         }
-        (astHelperStrLid "props")
+        (astHelperStrLidStr "props")
     ];
   let inner = {
     ptyp_loc: default_loc.contents,
@@ -314,7 +347,7 @@ let propTypesToActualTypes fields => {
         {
           ptyp_loc: default_loc.contents,
           ptyp_attributes: [],
-          ptyp_desc: Ptyp_constr (astHelperStrLid (Lident "unit")) []
+          ptyp_desc: Ptyp_constr (astHelperStrLidIdent ["unit"]) []
         }
         {ptyp_loc: default_loc.contents, ptyp_attributes: [], ptyp_desc: Ptyp_var "reactJsProps"}
   };
@@ -404,8 +437,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
                             ptyp_attributes: [],
                             ptyp_desc:
                               Ptyp_constr
-                                (astHelperStrLid (Lident "pleaseProvideTheShapeOfStateManually"))
-                                []
+                                (astHelperStrLidIdent ["pleaseProvideTheShapeOfStateManually"]) []
                           }
                         )
                       ]
@@ -413,7 +445,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
                 }
               ]
         }
-        (astHelperStrLid "state")
+        (astHelperStrLidStr "state")
     ];
   /* drill deeeeeply into the function AST to get the shape of the return value */
   switch initialStateDeclaration {
@@ -449,7 +481,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
                 ptyp_loc: default_loc.contents,
                 ptyp_attributes: [],
                 ptyp_desc:
-                  Ptyp_constr (astHelperStrLid (Lident "pleaseFillTheTypeForThisKeyManually")) []
+                  Ptyp_constr (astHelperStrLidIdent ["pleaseFillTheTypeForThisKeyManually"]) []
               }
             )
           }
@@ -472,7 +504,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
                   }
                 ]
           }
-          (astHelperStrLid "state")
+          (astHelperStrLidStr "state")
       ]
     | None => bailType
     }
@@ -510,34 +542,17 @@ and functionMapper
     | Function.BodyExpression expression => expressionMapper context::context expression
     | Function.BodyBlock (_, body) => statementBlockMapper context::context body
     };
-  /* let bodyReason =
-     context.insideReactCreateClass ?
-       {
-         let expr =
-           Exp.constraint_
-             (
-               Exp.apply
-                 (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "getState")))
-                 [("", Exp.ident (astHelperStrLid (Lident "this")))]
-             )
-             (Typ.constr (astHelperStrLid (Lident "state")) []);
-         Exp.let_
-           Nonrecursive
-           [parseTreeValueBinding pat::(Pat.var (astHelperStrLid "state")) expr::expr]
-           bodyReason
-       } :
-       bodyReason; */
   let wrapBodyInReturnType body =>
     switch returnType {
     | None => body
-    | Some typeName => Exp.constraint_ body (Typ.constr (astHelperStrLid (Lident typeName)) [])
+    | Some typeName => Exp.constraint_ body (Typ.constr (astHelperStrLidIdent [typeName]) [])
     };
   switch params {
   | [] =>
     Exp.fun_
       ""
       None
-      (Pat.construct (astHelperStrLid (Lident "()")) None)
+      (Pat.construct (astHelperStrLidIdent correct::false ["()"]) None)
       (wrapBodyInReturnType bodyReason)
   | [(_, first), ...rest] =>
     let partialResult =
@@ -547,11 +562,11 @@ and functionMapper
           fun expr' (_, param) =>
             switch param {
             | Pattern.Identifier (_, {Identifier.name: name, _}) =>
-              Exp.fun_ "" None (Pat.construct (astHelperStrLid (Lident name)) None) expr'
+              Exp.fun_ "" None (Pat.construct (astHelperStrLidIdent [name]) None) expr'
             | Pattern.Object _
             | Pattern.Array _
             | Pattern.Assignment _
-            | Pattern.Expression _ => Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) expr'
+            | Pattern.Expression _ => Exp.fun_ "" None (Pat.var (astHelperStrLidStr "fixme")) expr'
             }
         )
         bodyReason;
@@ -560,10 +575,10 @@ and functionMapper
       Exp.fun_
         ""
         None
-        (Pat.construct (astHelperStrLid (Lident name)) None)
+        (Pat.construct (astHelperStrLidIdent [name]) None)
         (wrapBodyInReturnType partialResult)
     | _ =>
-      Exp.fun_ "" None (Pat.var (astHelperStrLid "fixme")) (wrapBodyInReturnType partialResult)
+      Exp.fun_ "" None (Pat.var (astHelperStrLidStr "fixme")) (wrapBodyInReturnType partialResult)
     }
   }
 }
@@ -576,8 +591,8 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
          will compile, through BS, to number. *Very* dangerous to do interop this way and pass around
          numbers thinking you're holding true/false */
       /* boolean ? Exp. */
-      Exp.ident (astHelperStrLid (Ldot (Lident "Js") (boolean ? "true_" : "false_")))
-    | Null => Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null"))
+      Exp.ident (astHelperStrLidIdent correct::false ["Js", boolean ? "true_" : "false_"])
+    | Null => Exp.ident (astHelperStrLidIdent correct::false ["Js", "null"])
     | Number n =>
       let intN = int_of_float n;
       if (float_of_int intN == n) {
@@ -625,7 +640,7 @@ and jsxElementMapper
               /* JSX's <Foo checked /> is sugar for <Foo checked={true} />. What a waste */
               let valueReason =
                 switch value {
-                | None => Exp.ident (astHelperStrLid (Ldot (Lident "Js") "true_"))
+                | None => Exp.ident (astHelperStrLidIdent correct::false ["Js", "true_"])
                 | Some (Attribute.Literal _ lit) => literalMapper lit
                 | Some (
                     Attribute.ExpressionContainer _ {ExpressionContainer.expression: expression}
@@ -653,28 +668,23 @@ and jsxElementMapper
            have to take a shortcut and use a bs.obj instead */
         let jsObj =
           Exp.extension (
-            astHelperStrLid "bs.obj",
+            astHelperStrLidStr "bs.obj",
             PStr [
               Str.eval (
-                Exp.record
-                  (constructRecordOrLabels (fun name => astHelperStrLid (Lident name))) None
+                Exp.record (constructRecordOrLabels (fun name => astHelperStrLidIdent [name])) None
               )
             ]
           );
         Exp.apply
-          (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createElement")))
-          [
-            ("", Exp.ident (astHelperStrLid (Lident name))),
-            ("", jsObj),
-            ("", Exp.array childrenReact)
-          ]
+          (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createElement"]))
+          [("", Exp.constant (Const_string name None)), ("", jsObj), ("", Exp.array childrenReact)]
       } else {
         let partialArguments = constructRecordOrLabels (fun name => name);
         /* add children */
         let arguments = partialArguments @ [("", listToListAst childrenReact)];
         Exp.apply
-          attrs::[(astHelperStrLid "JSX", PStr [])]
-          (Exp.ident (astHelperStrLid (Lident name)))
+          attrs::[(astHelperStrLidStr correct::false "JSX", PStr [])]
+          (Exp.ident (astHelperStrLidIdent correct::false [name]))
           arguments
       }
     | MemberExpression (_, {MemberExpression._object: _object, property}) =>
@@ -705,7 +715,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
   Parser_flow.Ast.Expression.Object.(
     Parser_flow.Ast.(
       Exp.extension (
-        astHelperStrLid "bs.obj",
+        astHelperStrLidStr "bs.obj",
         PStr [
           Str.eval (
             Exp.record
@@ -721,18 +731,18 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
                         switch key {
                         | Property.Literal (_, {Literal.value: name}) =>
                           switch name {
-                          | Literal.String s => Lident s
-                          | Literal.Boolean b => Lident (string_of_bool b)
-                          | Literal.Null => Lident "null"
-                          | Literal.Number n => Lident (string_of_float n)
-                          | Literal.RegExp _ => Lident "regexAsKeyNotImplementedYet"
+                          | Literal.String s => [s]
+                          | Literal.Boolean b => [string_of_bool b]
+                          | Literal.Null => ["null"]
+                          | Literal.Number n => [string_of_float n]
+                          | Literal.RegExp _ => ["regexAsKeyNotImplementedYet"]
                           }
-                        | Property.Identifier (_, {Identifier.name: name, _}) => Lident name
-                        | Property.Computed _ => Lident "notThereYet"
+                        | Property.Identifier (_, {Identifier.name: name, _}) => [name]
+                        | Property.Computed _ => ["notThereYet"]
                         };
-                      (astHelperStrLid keyReason, expressionMapper context::context value)
+                      (astHelperStrLidIdent keyReason, expressionMapper context::context value)
                     | SpreadProperty _ => (
-                        astHelperStrLid (Lident "objectSpreadNotImplementedYet"),
+                        astHelperStrLidIdent ["objectSpreadNotImplementedYet"],
                         Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
                       )
                     }
@@ -757,11 +767,12 @@ and memberMapper
     let propertyReason =
       switch property {
       | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-        Exp.ident (astHelperStrLid (Lident (correctIdentifier name)))
+        Exp.ident (astHelperStrLidIdent [name])
       | Member.PropertyExpression expr => expressionMapper context::context expr
       };
     let left = expressionMapper context::context objectWrap;
-    Exp.apply (Exp.ident (astHelperStrLid (Lident "##"))) [("", left), ("", propertyReason)]
+    Exp.apply
+      (Exp.ident (astHelperStrLidIdent correct::false ["##"])) [("", left), ("", propertyReason)]
   };
   if context.insidePropTypes {
     switch property {
@@ -769,14 +780,26 @@ and memberMapper
       switch name {
       | "isRequired" =>
         Exp.apply
-          (Exp.ident (astHelperStrLid (Ldot (Ldot (Lident "ReactRe") "PropTypes") "isRequired")))
+          (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", name]))
           [("", expressionMapper context::context objectWrap)]
-      | actualPropName =>
-        Exp.ident (
-          astHelperStrLid (
-            Ldot (Ldot (Lident "ReactRe") "PropTypes") (correctIdentifier actualPropName)
-          )
-        )
+      | "oneOfType"
+      | "oneOf"
+      | "objectOf"
+      | "instanceOf"
+      | "arrayOf"
+      | "string"
+      | "bool"
+      | "number"
+      | "node"
+      | "symbol"
+      | "any"
+      | "element"
+      | "func"
+      | "shape" => Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", name])
+      | "object" =>
+        Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", "object_"])
+      | unrecognizedPropName => defaultCase ()
+      /* expressionMapper context::context property */
       }
     | Member.PropertyExpression expr => expressionMapper context::context expr
     }
@@ -784,7 +807,7 @@ and memberMapper
     context.insideReactCreateClass {
     switch (_object, property) {
     | (This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
-      Exp.ident (astHelperStrLid (Lident "props"))
+      Exp.ident (astHelperStrLidIdent ["props"])
     | _ => defaultCase ()
     }
   } else {
@@ -806,7 +829,7 @@ and statementMapper
           List.hd declarations;
         let expr =
           switch init {
-          | None => Exp.construct (astHelperStrLid (Lident "None")) None
+          | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
           | Some e => expressionMapper context::context e
           };
         let innerMostExpr =
@@ -844,7 +867,7 @@ and statementMapper
             };
           Exp.let_
             Nonrecursive
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid patternName)) expr::expr]
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr patternName)) expr::expr]
             innerMostExpr
         | Pattern.Object {Pattern.Object.properties: properties} =>
           switch (properties, init) {
@@ -861,8 +884,8 @@ and statementMapper
               Some (_, Expression.Identifier (_, {Identifier.name: "React"}))
             ) =>
             Exp.letmodule
-              (astHelperStrLid "PropTypes")
-              (Mod.ident (astHelperStrLid (Ldot (Lident "ReactRe") "PropTypes")))
+              (astHelperStrLidStr correct::false "PropTypes")
+              (Mod.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes"]))
               innerMostExpr
           | _ =>
             Exp.let_
@@ -932,7 +955,7 @@ and statementMapper
           Nonrecursive
           [
             parseTreeValueBinding
-              pat::(Pat.var (astHelperStrLid funcName))
+              pat::(Pat.var (astHelperStrLidStr funcName))
               expr::(functionMapper context::context returnType::None functionWrap)
           ]
           innerMostExpr
@@ -996,7 +1019,7 @@ and statementMapper
                       switch (name, static) {
                       | (name, false) =>
                         Cf.method_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Public
                           (
                             Cfk_concrete
@@ -1008,13 +1031,13 @@ and statementMapper
                           )
                       | (name, true) =>
                         Cf.val_
-                          (astHelperStrLid "staticMethod")
+                          (astHelperStrLidStr "staticMethod")
                           Immutable
                           (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
                       }
                     | _ =>
                       Cf.val_
-                        (astHelperStrLid "ComplexClassPropKey")
+                        (astHelperStrLidStr "complexClassPropKey")
                         Immutable
                         (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
                     }
@@ -1027,7 +1050,7 @@ and statementMapper
                       switch (name, static, value) {
                       | ("propTypes", true, Some value) =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Immutable
                           (
                             Cfk_concrete
@@ -1036,17 +1059,17 @@ and statementMapper
                           )
                       | ("displayName", true, Some value) =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Immutable
                           (Cfk_concrete Fresh (expressionMapper context::context value))
                       | (_, true, _) =>
                         Cf.val_
-                          (astHelperStrLid "staticPropertyOtherThanPropTypes")
+                          (astHelperStrLidStr "staticPropertyOtherThanPropTypes")
                           Immutable
                           (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
                       | ("state", _, Some value) =>
                         Cf.method_
-                          (astHelperStrLid "getInitialState")
+                          (astHelperStrLidStr "getInitialState")
                           Public
                           (
                             Cfk_concrete
@@ -1057,11 +1080,14 @@ and statementMapper
                                     Exp.fun_
                                       ""
                                       None
-                                      (Pat.construct (astHelperStrLid (Lident "()")) None)
+                                      (
+                                        Pat.construct
+                                          (astHelperStrLidIdent correct::false ["()"]) None
+                                      )
                                       (
                                         Exp.constraint_
                                           (expressionMapper context::context value)
-                                          (Typ.constr (astHelperStrLid (Lident "state")) [])
+                                          (Typ.constr (astHelperStrLidIdent ["state"]) [])
                                       )
                                   )
                                   None
@@ -1072,7 +1098,7 @@ and statementMapper
                         | (_, Expression.Function f)
                         | (_, Expression.ArrowFunction f) =>
                           Cf.method_
-                            (astHelperStrLid name)
+                            (astHelperStrLidStr name)
                             Public
                             (
                               Cfk_concrete
@@ -1083,22 +1109,23 @@ and statementMapper
                             )
                         | _ =>
                           Cf.val_
-                            (astHelperStrLid name)
+                            (astHelperStrLidStr name)
                             Mutable
                             (Cfk_concrete Fresh (expressionMapper context::context value))
                         }
                       | (name, _, None) =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Mutable
                           (
                             Cfk_concrete
-                              Fresh (Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null")))
+                              Fresh
+                              (Exp.ident (astHelperStrLidIdent correct::false ["Js", "null"]))
                           )
                       }
                     | _ =>
                       Cf.val_
-                        (astHelperStrLid "ComplexClassPropKey")
+                        (astHelperStrLidStr "complexClassPropKey")
                         Immutable
                         (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
                     }
@@ -1107,11 +1134,11 @@ and statementMapper
             );
           let createClassObj =
             Exp.object_
-              attrs::[(astHelperStrLid "bs", PStr [])]
-              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLid "this"))) createClassSpec);
+              attrs::[(astHelperStrLidStr "bs", PStr [])]
+              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpec);
           let expr =
             Exp.apply
-              (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
+              (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createClass"]))
               [("", createClassObj)];
           let terminal =
             switch context.terminalExpr {
@@ -1121,7 +1148,7 @@ and statementMapper
           Exp.let_
             Nonrecursive
             /* every react component must be called comp so that we could do Foo.comp on it for JSX */
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLid "comp")) expr::expr]
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr "comp")) expr::expr]
             terminal
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
@@ -1212,7 +1239,7 @@ and expressionMapper
                     | Function functionWrap
                     | ArrowFunction functionWrap =>
                       Cf.method_
-                        (astHelperStrLid name)
+                        (astHelperStrLidStr name)
                         Public
                         (
                           Cfk_concrete
@@ -1232,7 +1259,7 @@ and expressionMapper
                       switch name {
                       | "propTypes" =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Immutable
                           (
                             Cfk_concrete
@@ -1244,12 +1271,12 @@ and expressionMapper
                           )
                       | "displayName" =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Immutable
                           (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
                       | name =>
                         Cf.val_
-                          (astHelperStrLid name)
+                          (astHelperStrLidStr name)
                           Mutable
                           (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
                       }
@@ -1257,18 +1284,18 @@ and expressionMapper
                   | Property _
                   | SpreadProperty _ =>
                     Cf.val_
-                      (astHelperStrLid "notSureWhat")
+                      (astHelperStrLidStr "notSureWhat")
                       Immutable
-                      (Cfk_concrete Fresh (Exp.ident (astHelperStrLid (Lident "thisIs"))))
+                      (Cfk_concrete Fresh (Exp.ident (astHelperStrLidIdent ["thisIs"])))
                   }
                 )
             );
           let createClassObj =
             Exp.object_
-              attrs::[(astHelperStrLid "bs", PStr [])]
-              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLid "this"))) createClassSpec);
+              attrs::[(astHelperStrLidStr "bs", PStr [])]
+              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpec);
           Exp.apply
-            (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "createClass")))
+            (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createClass"]))
             [("", createClassObj)]
         | (
             Member {
@@ -1281,31 +1308,59 @@ and expressionMapper
           )
             when context.insideReactCreateClass =>
           Exp.apply
-            (Exp.ident (astHelperStrLid (Ldot (Lident "ReactRe") "setState")))
-            [("", Exp.ident (astHelperStrLid (Lident "this"))), ...processArguments arguments]
+            (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "setState"]))
+            [("", Exp.ident (astHelperStrLidIdent ["this"])), ...processArguments arguments]
         | (Identifier (_, {Identifier.name: "cx"}), arguments) =>
           /* cx is treated differntly; facebook-specific */
           /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
+          let argumentsIntoReasonArguments2 arguments =>
+            arguments |>
+            List.map (
+              fun argument =>
+                switch argument {
+                | Expression ((_, Literal {Literal.value: value}) as expr) =>
+                  expressionMapper context::context expr
+                | Expression expr =>
+                  Exp.apply
+                    (Exp.ident (astHelperStrLidIdent correct::false ["Obj", "magic"]))
+                    [("", expressionMapper context::context expr)]
+                | Spread _ => Exp.constant (Const_string "unregonizedSpreadInCx" None)
+                }
+            );
           Exp.apply
-            (Exp.ident (astHelperStrLid (Ldot (Lident "CxRe") "cxRe")))
-            [("", Exp.array (argumentsIntoReasonArguments arguments))]
-        /* (processArguments arguments) */
+            (Exp.ident (astHelperStrLidIdent correct::false ["CxRe", "cxRe"]))
+            [("", Exp.array (argumentsIntoReasonArguments2 arguments))]
+        | (Identifier (_, {Identifier.name: "cssVar"}), arguments) =>
+          /* cssVar is also facebook-specific */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["CssVarRe", "cssVarRe"]))
+            (processArguments arguments)
+        | (Identifier (_, {Identifier.name: "fbt"}), arguments) =>
+          /* same for fbt is also facebook-specific */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["FbtRe", "fbtRe"]))
+            (processArguments arguments)
+        | (Identifier (_, {Identifier.name: "invariant"}), arguments) =>
+          /* same for invariant */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["invariantRe", "invariant"]))
+            (processArguments arguments)
         | (caller, arguments) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
-      | Identifier (_, {Identifier.name: name}) =>
-        Exp.ident (astHelperStrLid (Lident (correctIdentifier name)))
+      | Identifier (_, {Identifier.name: name}) => Exp.ident (astHelperStrLidIdent [name])
       | Literal lit => literalMapper lit
       | Member member => memberMapper context::context member
-      | This => Exp.ident (astHelperStrLid (Lident "this"))
+      | This => Exp.ident (astHelperStrLidIdent ["this"])
       | Logical {Logical.operator: operator, left: leftWrap, right: (_, right) as rightWrap} =>
         /* warning: BuckleScript boolean and js boolean aren't the same! */
         let toBool expr =>
-          Exp.apply (Exp.ident (astHelperStrLid (Ldot (Lident "Js") "to_bool"))) [("", expr)];
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["Js", "to_bool"])) [("", expr)];
         switch operator {
         | Logical.Or =>
           Exp.apply
-            (Exp.ident (astHelperStrLid (Lident "||")))
+            (Exp.ident (astHelperStrLidIdent correct::false ["||"]))
             [
               ("", toBool (expressionMapper context::context leftWrap)),
               ("", toBool (expressionMapper context::context rightWrap))
@@ -1318,19 +1373,19 @@ and expressionMapper
               (toBool (expressionMapper context::context leftWrap))
               [
                 {
-                  pc_lhs: Pat.construct (astHelperStrLid (Lident "true")) None,
+                  pc_lhs: Pat.construct (astHelperStrLidIdent ["true"]) None,
                   pc_guard: None,
                   pc_rhs: expressionMapper context::context rightWrap
                 },
                 {
-                  pc_lhs: Pat.construct (astHelperStrLid (Lident "false")) None,
+                  pc_lhs: Pat.construct (astHelperStrLidIdent ["false"]) None,
                   pc_guard: None,
-                  pc_rhs: Exp.ident (astHelperStrLid (Ldot (Lident "Js") "null"))
+                  pc_rhs: Exp.ident (astHelperStrLidIdent ["Js", "null"])
                 }
               ]
           | _ =>
             Exp.apply
-              (Exp.ident (astHelperStrLid (Lident "&&")))
+              (Exp.ident (astHelperStrLidIdent correct::false ["&&"]))
               [
                 ("", toBool (expressionMapper context::context leftWrap)),
                 ("", toBool (expressionMapper context::context rightWrap))
@@ -1343,7 +1398,7 @@ and expressionMapper
         List.map (
           fun element =>
             switch element {
-            | None => Exp.construct (astHelperStrLid (Lident "None")) None
+            | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
             | Some (Expression e) => expressionMapper context::context e
             | Some (Spread (_, _)) =>
               Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
@@ -1376,12 +1431,23 @@ and expressionMapper
           | Binary.In => "inNotImplemented"
           | Binary.Instanceof => "instanceOfNotImplemented"
           };
-        Exp.apply
-          (Exp.ident (astHelperStrLid (Lident operatorReason)))
-          [
-            ("", expressionMapper context::context left),
-            ("", expressionMapper context::context right)
-          ]
+        switch (operator, left, right) {
+        | (Binary.Equal, (_, Literal {Literal.value: Literal.Null}), _) =>
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["Js", "Null_undefined", "test"]))
+            [("", expressionMapper context::context right)]
+        | (Binary.Equal, _, (_, Literal {Literal.value: Literal.Null})) =>
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["Js", "Null_undefined", "test"]))
+            [("", expressionMapper context::context left)]
+        | _ =>
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false [operatorReason]))
+            [
+              ("", expressionMapper context::context left),
+              ("", expressionMapper context::context right)
+            ]
+        }
       | Assignment {Assignment.operator: operator, left: (_, left), right} =>
         /* let innerMostExpr =
            switch context.terminalExpr {
@@ -1409,7 +1475,7 @@ and expressionMapper
             | Pattern.Identifier _ => expMarker
             };
           Exp.apply
-            (Exp.ident (astHelperStrLid (Lident "#=")))
+            (Exp.ident (astHelperStrLidIdent correct::false ["#="]))
             [("", leftReason), ("", expressionMapper context::context right)]
         }
       | Unary {Unary.operator: operator, prefix, argument: (_, argument) as argumentWrap} =>
@@ -1419,11 +1485,11 @@ and expressionMapper
           | Unary {Unary.operator: Unary.Not, argument: innerArgument} =>
             /* !! is a js idiom for casting to boolean */
             Exp.apply
-              (Exp.ident (astHelperStrLid (Lident "pleaseWriteAIsTruthyFunction")))
+              (Exp.ident (astHelperStrLidIdent ["pleaseWriteAIsTruthyFunction"]))
               [("", expressionMapper context::context innerArgument)]
           | _ =>
             Exp.apply
-              (Exp.ident (astHelperStrLid (Lident "not")))
+              (Exp.ident (astHelperStrLidIdent ["not"]))
               [("", expressionMapper context::context argumentWrap)]
           }
         | Unary.Minus
@@ -1439,12 +1505,12 @@ and expressionMapper
           (expressionMapper context::context test)
           [
             {
-              pc_lhs: Pat.construct (astHelperStrLid (Lident "true")) None,
+              pc_lhs: Pat.construct (astHelperStrLidIdent ["true"]) None,
               pc_guard: None,
               pc_rhs: expressionMapper context::context consequent
             },
             {
-              pc_lhs: Pat.construct (astHelperStrLid (Lident "false")) None,
+              pc_lhs: Pat.construct (astHelperStrLidIdent ["false"]) None,
               pc_guard: None,
               pc_rhs: expressionMapper context::context alternate
             }
@@ -1573,7 +1639,7 @@ let topStatementsMapper statementWrap => {
         Nonrecursive
         [
           {
-            pvb_pat: Pat.var (astHelperStrLid "topPlaceholderMe"),
+            pvb_pat: Pat.var (astHelperStrLidStr "topPlaceholderMe"),
             pvb_expr: expUnit,
             pvb_attributes: [],
             pvb_loc: default_loc.contents
@@ -1621,7 +1687,7 @@ let topStatementsMapper statementWrap => {
           Nonrecursive
           [
             {
-              pvb_pat: Pat.var (astHelperStrLid "topPlaceholder"),
+              pvb_pat: Pat.var (astHelperStrLidStr "topPlaceholder"),
               pvb_expr: expUnit,
               pvb_attributes: [],
               pvb_loc: default_loc.contents
