@@ -2,7 +2,6 @@
   "name": "flow-dev-tools",
   "version": "0.1.0",
   "dependencies": {
-    "@opam-alpha/merlin": "^ 2.5.0",
     "babel-plugin-syntax-async-functions": "^6.8.0",
     "babel-plugin-syntax-flow": "^6.8.0",
     "babel-plugin-syntax-trailing-function-commas": "^6.8.0",
