@@ -1724,7 +1724,9 @@ let topStatementsMapper statementWrap => {
 };
 
 let () =
-  try {
+  if (Array.length Sys.argv != 2) {
+    raise (Invalid_argument "Please provide a the JS file to convert over.")
+  } else {
     let file = Sys.argv.(1);
     let parse_options =
       Some Parser_env.{
@@ -1750,6 +1752,4 @@ let () =
     let result: Parsetree.structure =
       statements |> List.map (fun statementWrap => topStatementsMapper statementWrap) |> List.concat;
     output_value stdout result
-  } {
-  | Invalid_argument _ => raise (Invalid_argument "Please provide a the JS file to convert over.")
   };
