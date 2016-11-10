@@ -14,7 +14,7 @@
     "babylon": "^6.11.2",
     "blessed": "^0.1.81",
     "colors": "~1.1.2",
-    "dependency-env": "github:npm-ml/dependency-env",
+    "dependency-env": "https://github.com/npm-ml/dependency-env.git",
     "diff": "~2.2.1",
     "flow-parser": "~0.21.0",
     "glob": "^7.0.3",

@@ -17,6 +17,8 @@ let bTop = 6.5;
 
 "asd";
 
+afoo.(1);
+
 show ? a : b;
 
 let module PropTypes = ReactRe.PropTypes;
@@ -69,7 +71,9 @@ let asd =
         oneCall3 ();
         let bInner a => 6;
         let cInner = 7 + 1;
-        if (not conda) {b};
+        if (not conda) {
+          b
+        };
         this##leThis##leThat this##leObj##laObj;
         (foo.bar ()).oneCall4 ()
       };
