@@ -759,7 +759,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
   )
 and memberMapper
     context::context
-    {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, _} => {
+    {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, computed} => {
   /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
      transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
      a fixed point lol? */
@@ -767,15 +767,37 @@ and memberMapper
   open Parser_flow.Ast;
   open Parser_flow.Ast.Expression;
   let defaultCase () => {
-    let propertyReason =
-      switch property {
-      | Member.PropertyIdentifier (_, {Identifier.name: name, _}) =>
-        Exp.ident (astHelperStrLidIdent [name])
-      | Member.PropertyExpression expr => expressionMapper context::context expr
-      };
     let left = expressionMapper context::context objectWrap;
-    Exp.apply
-      (Exp.ident (astHelperStrLidIdent correct::false ["##"])) [("", left), ("", propertyReason)]
+    switch property {
+    | Member.PropertyExpression ((_, Literal {Literal.value: Literal.Number n}) as expr) =>
+      /* foo[1] => foo.(1); */
+      let intN = int_of_float n;
+      if (float_of_int intN == n) {
+        Exp.apply
+          (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
+          [("", left), ("", Exp.constant (Const_int intN))]
+      } else {
+        expressionMapper context::context expr
+      }
+    /* astexplorer flow says foo[bar], bar is an identifier. In reality this flow parses it as an expression */
+    | Member.PropertyIdentifier (_, {Identifier.name: name}) =>
+      /* foo.bar => foo##bar; */
+      Exp.apply
+        (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
+        [("", left), ("", Exp.ident (astHelperStrLidIdent [name]))]
+    | Member.PropertyExpression ((_, expr) as exprWrap) =>
+      if computed {
+        /* foo.[bar] => foo.(bar); treat as array */
+        Exp.apply
+          (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
+          [("", left), ("", expressionMapper context::context exprWrap)]
+      } else {
+        /* foo.bar => foo##bar; */
+        Exp.apply
+          (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
+          [("", left), ("", expressionMapper context::context exprWrap)]
+      }
+    }
   };
   if context.insidePropTypes {
     switch property {
