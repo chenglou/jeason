@@ -1194,6 +1194,12 @@ and statementMapper
             terminal
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
+      | ExportDeclaration {Statement.ExportDeclaration.declaration} =>
+        switch declaration {
+        | None => expUnit
+        | Some (ExportDeclaration.Declaration decl) => statementMapper context::context decl
+        | Some (ExportDeclaration.Expression expr) => expressionMapper context::context expr
+        }
       | Labeled _
       | Break _
       | Continue _
@@ -1216,7 +1222,6 @@ and statementMapper
       | DeclareModule _
       | DeclareModuleExports _
       | DeclareExportDeclaration _
-      | ExportDeclaration _
       | ImportDeclaration _ =>
         switch context.terminalExpr {
         | None => Exp.constant (Const_string "statementBail" None)
