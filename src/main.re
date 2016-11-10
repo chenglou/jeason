@@ -103,7 +103,7 @@ let listToListAst lst => {
 
 type context = {
   terminalExpr: option Parsetree.expression,
-  insideReactCreateClass: bool,
+  insideReactCreateClass: option string,
   insidePropTypes: bool,
   mutable reactClassSpecRandomProps: list (list string)
 };
@@ -166,8 +166,7 @@ let rec convertPropTypeType
             {
               ptyp_loc: default_loc.contents,
               ptyp_attributes: [],
-              ptyp_desc:
-                Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) []
+              ptyp_desc: Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) []
             }
           ]
       )
@@ -677,7 +676,11 @@ and jsxElementMapper
           );
         Exp.apply
           (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createElement"]))
-          [("", Exp.constant (Const_string name None)), ("", jsObj), ("", Exp.array childrenReact)]
+          [
+            ("", Exp.ident (astHelperStrLidIdent [name])),
+            ("", jsObj),
+            ("", Exp.array childrenReact)
+          ]
       } else {
         let partialArguments = constructRecordOrLabels (fun name => name);
         /* add children */
@@ -803,15 +806,12 @@ and memberMapper
       }
     | Member.PropertyExpression expr => expressionMapper context::context expr
     }
-  } else if
-    context.insideReactCreateClass {
-    switch (_object, property) {
-    | (This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
+  } else {
+    switch (context.insideReactCreateClass, _object, property) {
+    | (Some _, This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
       Exp.ident (astHelperStrLidIdent ["props"])
     | _ => defaultCase ()
     }
-  } else {
-    defaultCase ()
   }
 }
 and statementMapper
@@ -827,21 +827,11 @@ and statementMapper
         /* TODO: actually do this lol */
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) =
           List.hd declarations;
-        let expr =
-          switch init {
-          | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
-          | Some e => expressionMapper context::context e
-          };
-        let innerMostExpr =
-          switch context.terminalExpr {
-          | None => expUnit
-          | Some expr => expr
-          };
-        switch id {
-        | Pattern.Identifier (_, {Identifier.name: name, _}) =>
-          let patternName =
-            switch init {
-            | Some (
+        /* check if it's a let foo = React.createClass */
+        let (context, isReactClass) =
+          switch (init, id) {
+          | (
+              Some (
                 _,
                 Expression.Call {
                   Expression.Call.callee: (
@@ -860,14 +850,32 @@ and statementMapper
                     }
                   )
                 }
-              ) =>
-              /* every react component must be called comp so that we could do Foo.comp on it for JSX */
-              "comp"
-            | _ => name
-            };
+              ),
+              Pattern.Identifier (_, {Identifier.name: name})
+            ) => (
+              {...context, insideReactCreateClass: Some name},
+              true
+            )
+          | _ => (context, false)
+          };
+        let expr =
+          switch init {
+          | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
+          | Some e => expressionMapper context::context e
+          };
+        let innerMostExpr =
+          switch context.terminalExpr {
+          | None => expUnit
+          | Some expr => expr
+          };
+        switch id {
+        | Pattern.Identifier (_, {Identifier.name: name, _}) =>
           Exp.let_
             Nonrecursive
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr patternName)) expr::expr]
+            [
+              parseTreeValueBinding
+                pat::(Pat.var (astHelperStrLidStr (isReactClass ? "comp" : name))) expr::expr
+            ]
             innerMostExpr
         | Pattern.Object {Pattern.Object.properties: properties} =>
           switch (properties, init) {
@@ -985,7 +993,8 @@ and statementMapper
               }
             )
           ) =>
-          let context = {...context, insideReactCreateClass: true};
+          let context = {...context, insideReactCreateClass: Some className};
+          let hasDisplayNameAlready = ref false;
           let createClassSpec =
             body |>
             /* filter out "props" since we already use propTypes */
@@ -1058,6 +1067,7 @@ and statementMapper
                               (expressionMapper context::{...context, insidePropTypes: true} value)
                           )
                       | ("displayName", true, Some value) =>
+                        hasDisplayNameAlready := true;
                         Cf.val_
                           (astHelperStrLidStr name)
                           Immutable
@@ -1132,6 +1142,16 @@ and statementMapper
                   }
                 )
             );
+          let createClassSpec =
+            !hasDisplayNameAlready ?
+              createClassSpec :
+              [
+                Cf.val_
+                  (astHelperStrLidStr "displayName")
+                  Immutable
+                  (Cfk_concrete Fresh (Exp.constant (Const_string className None))),
+                ...createClassSpec
+              ];
           let createClassObj =
             Exp.object_
               attrs::[(astHelperStrLidStr "bs", PStr [])]
@@ -1210,16 +1230,23 @@ and expressionMapper
           | [] => [("", expUnit)]
           | oneArgOrMore => oneArgOrMore |> List.map (fun arg => ("", arg))
           };
-        switch (callee, arguments) {
+        switch (callee, context.insideReactCreateClass, arguments) {
         | (
             Member {
-              Member._object: (_, Identifier (_, {Identifier.name: "React", _})),
-              property: Member.PropertyIdentifier (_, {Identifier.name: "createClass", _}),
+              Member._object: (_, This),
+              property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}),
               _
             },
-            [Expression (_, Object {Object.properties: properties})]
+            Some _,
+            _
           ) =>
-          let context = {...context, insideReactCreateClass: true};
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "setState"]))
+            [("", Exp.ident (astHelperStrLidIdent ["this"])), ...processArguments arguments]
+        | (_, Some className, [Expression (_, Object {Object.properties: properties})]) =>
+          /* the context insideReactCreateClass is already set by the variable declarator (search declarator)
+             a level above */
+          let hasDisplayNameAlready = ref false;
           let createClassSpec =
             properties |>
             List.map (
@@ -1270,6 +1297,7 @@ and expressionMapper
                               )
                           )
                       | "displayName" =>
+                        hasDisplayNameAlready := true;
                         Cf.val_
                           (astHelperStrLidStr name)
                           Immutable
@@ -1290,6 +1318,16 @@ and expressionMapper
                   }
                 )
             );
+          let createClassSpec =
+            !hasDisplayNameAlready ?
+              createClassSpec :
+              [
+                Cf.val_
+                  (astHelperStrLidStr "displayName")
+                  Immutable
+                  (Cfk_concrete Fresh (Exp.constant (Const_string className None))),
+                ...createClassSpec
+              ];
           let createClassObj =
             Exp.object_
               attrs::[(astHelperStrLidStr "bs", PStr [])]
@@ -1297,20 +1335,7 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createClass"]))
             [("", createClassObj)]
-        | (
-            Member {
-              Member._object: (_, This),
-              /* property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}), */
-              property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}),
-              _
-            },
-            arguments
-          )
-            when context.insideReactCreateClass =>
-          Exp.apply
-            (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "setState"]))
-            [("", Exp.ident (astHelperStrLidIdent ["this"])), ...processArguments arguments]
-        | (Identifier (_, {Identifier.name: "cx"}), arguments) =>
+        | (Identifier (_, {Identifier.name: "cx"}), _, _) =>
           /* cx is treated differntly; facebook-specific */
           /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
           let argumentsIntoReasonArguments2 arguments =>
@@ -1330,22 +1355,22 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["CxRe", "cxRe"]))
             [("", Exp.array (argumentsIntoReasonArguments2 arguments))]
-        | (Identifier (_, {Identifier.name: "cssVar"}), arguments) =>
+        | (Identifier (_, {Identifier.name: "cssVar"}), _, _) =>
           /* cssVar is also facebook-specific */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["CssVarRe", "cssVarRe"]))
             (processArguments arguments)
-        | (Identifier (_, {Identifier.name: "fbt"}), arguments) =>
+        | (Identifier (_, {Identifier.name: "fbt"}), _, _) =>
           /* same for fbt is also facebook-specific */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["FbtRe", "fbtRe"]))
             (processArguments arguments)
-        | (Identifier (_, {Identifier.name: "invariant"}), arguments) =>
+        | (Identifier (_, {Identifier.name: "invariant"}), _, _) =>
           /* same for invariant */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["invariantRe", "invariant"]))
             (processArguments arguments)
-        | (caller, arguments) =>
+        | (_, _, _) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
         }
       | Identifier (_, {Identifier.name: name}) => Exp.ident (astHelperStrLidIdent [name])
@@ -1540,7 +1565,7 @@ let topStatementsMapper statementWrap => {
       context::{
         terminalExpr: None,
         insidePropTypes: false,
-        insideReactCreateClass: false,
+        insideReactCreateClass: None,
         reactClassSpecRandomProps: []
       }
       statementWrap;
