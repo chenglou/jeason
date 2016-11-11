@@ -23,13 +23,12 @@ let correctIdentifier ident => {
     ident
   } else {
     /* foo => foo
-       Foo => _Foo
+       Foo => foo
        _foo => foo
        _foo_bar => foo_bar_ */
     let correctedName = stripLeadingUnderscores ident;
     let correctedName = String.contains correctedName '_' ? correctedName ^ "_" : correctedName;
-    let correctedName =
-      String.capitalize correctedName == correctedName ? "_" ^ correctedName : correctedName;
+    let correctedName = String.uncapitalize correctedName;
     /* correct other cases where the js name is a reserved ocaml/reason keyword */
     switch correctedName {
     | "object" => "object_"
@@ -677,7 +676,7 @@ and jsxElementMapper
         Exp.apply
           (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createElement"]))
           [
-            ("", Exp.ident (astHelperStrLidIdent [name])),
+            ("", Exp.ident (astHelperStrLidIdent correct::false [name])),
             ("", jsObj),
             ("", Exp.array childrenReact)
           ]
@@ -1194,7 +1193,7 @@ and statementMapper
             terminal
         | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
         }
-      | ExportDeclaration {Statement.ExportDeclaration.declaration} =>
+      | ExportDeclaration {Statement.ExportDeclaration.declaration: declaration} =>
         switch declaration {
         | None => expUnit
         | Some (ExportDeclaration.Declaration decl) => statementMapper context::context decl
