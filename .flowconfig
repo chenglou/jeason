@@ -9,6 +9,9 @@
 
 <PROJECT_ROOT>/newtests/gen_flow_files_command/type_error.js
 
+<PROJECT_ROOT>/node_modules/.*
+<PROJECT_ROOT>/tsrc/.*
+
 [options]
 suppress_comment=.*\\$FlowFixMe
 suppress_comment=.*\\$FlowIssue
