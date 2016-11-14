@@ -38,6 +38,26 @@ let correctIdentifier ident => {
   }
 };
 
+let objectContainsKeyName key::key properties::properties =>
+  Parser_flow.Ast.Expression.(
+    properties |>
+    List.exists (
+      fun property =>
+        switch property {
+        | Object.Property (
+            _,
+            {
+              Object.Property.key:
+                Object.Property.Identifier (_, {Parser_flow.Ast.Identifier.name: name})
+            }
+          )
+            when name == key =>
+          true
+        | _ => false
+        }
+    )
+  );
+
 let astHelperStrLidStr correct::correct=true a => {
   loc: default_loc.contents,
   txt: correct ? correctIdentifier a : a
@@ -100,10 +120,17 @@ let listToListAst lst => {
   }
 };
 
+type insideReactClass =
+  | Nope
+  | InsidePropTypes
+  | Yes string;
+
+type addPropsAndStateDeclImmediately = {addPropsDecl: bool, addStateDecl: bool};
+
 type context = {
   terminalExpr: option Parsetree.expression,
-  insideReactCreateClass: option string,
-  insidePropTypes: bool,
+  insideReactClass: insideReactClass,
+  addPropsAndStateDeclImmediately: option addPropsAndStateDeclImmediately,
   mutable reactClassSpecRandomProps: list (list string)
 };
 
@@ -535,10 +562,43 @@ and functionMapper
     returnType::returnType
     {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
   open Parser_flow.Ast;
+  /* functionMapper is currently the only one using context.addPropsAndStateDeclImmediately. It wraps around the
+     function in props and state declaration. don't forget to unset `context.addPropsAndStateDeclImmediately`; */
   let bodyReason =
     switch body {
-    | Function.BodyExpression expression => expressionMapper context::context expression
-    | Function.BodyBlock (_, body) => statementBlockMapper context::context body
+    | Function.BodyExpression expression =>
+      expressionMapper context::{...context, addPropsAndStateDeclImmediately: None} expression
+    | Function.BodyBlock (_, body) =>
+      statementBlockMapper context::{...context, addPropsAndStateDeclImmediately: None} body
+    };
+  let bodyReason =
+    switch context.addPropsAndStateDeclImmediately {
+    | None => bodyReason
+    | Some {addPropsDecl, addStateDecl} =>
+      let wrap isProp body =>
+        Exp.let_
+          Nonrecursive
+          [
+            parseTreeValueBinding
+              pat::(Pat.var (astHelperStrLidStr (isProp ? "props" : "state")))
+              expr::(
+                Exp.constraint_
+                  (
+                    Exp.apply
+                      (
+                        Exp.ident (
+                          astHelperStrLidIdent
+                            correct::false ["ReactRe", isProp ? "getProps" : "getState"]
+                        )
+                      )
+                      [("", Exp.ident (astHelperStrLidIdent correct::false ["this"]))]
+                  )
+                  (Typ.constr (astHelperStrLidIdent [isProp ? "props" : "state"]) [])
+              )
+          ]
+          body;
+      let bodyReason = addStateDecl ? wrap false bodyReason : bodyReason;
+      addPropsDecl ? wrap true bodyReason : bodyReason
     };
   let wrapBodyInReturnType body =>
     switch returnType {
@@ -593,6 +653,7 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
     | Null => Exp.ident (astHelperStrLidIdent correct::false ["Js", "null"])
     | Number n =>
       let intN = int_of_float n;
+      /* if it's an integer */
       if (float_of_int intN == n) {
         Exp.constant (Const_int intN)
       } else {
@@ -709,7 +770,7 @@ and jsxChildMapper context::context (_, child) =>
       if (trimmedValue == "") {
         None
       } else {
-        Some (Exp.constant (Const_string value None))
+        Some (Exp.constant (Const_string trimmedValue None))
       }
     }
   )
@@ -726,9 +787,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
                 List.map (
                   fun property =>
                     switch property {
-                    | Property (_, {Property.key: key, value, kind, _method, _}) =>
-                      ignore kind;
-                      ignore _method;
+                    | Property (_, {Property.key: key, value}) =>
                       let keyReason =
                         switch key {
                         | Property.Literal (_, {Literal.value: name}) =>
@@ -798,7 +857,8 @@ and memberMapper
       }
     }
   };
-  if context.insidePropTypes {
+  switch context.insideReactClass {
+  | InsidePropTypes =>
     switch property {
     | Member.PropertyIdentifier (_, {Identifier.name: name}) =>
       switch name {
@@ -823,16 +883,20 @@ and memberMapper
       | "object" =>
         Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", "object_"])
       | unrecognizedPropName => defaultCase ()
-      /* expressionMapper context::context property */
       }
     | Member.PropertyExpression expr => expressionMapper context::context expr
     }
-  } else {
-    switch (context.insideReactCreateClass, _object, property) {
-    | (Some _, This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
+  | Yes _ =>
+    switch (_object, property) {
+    | (This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
+      /* we turn `this.props` (assumed to be a react class) into just `props` */
+      /* this wouldn't work well because
+         what about externals? they do need this
+         context.usesProps := true; */
       Exp.ident (astHelperStrLidIdent ["props"])
     | _ => defaultCase ()
     }
+  | Nope => defaultCase ()
   }
 }
 and statementMapper
@@ -849,7 +913,7 @@ and statementMapper
         let (_, {Statement.VariableDeclaration.Declarator.id: (_, id), init}) =
           List.hd declarations;
         /* check if it's a let foo = React.createClass */
-        let (context, isReactClass) =
+        let (context, isReactClassDecl) =
           switch (init, id) {
           | (
               Some (
@@ -869,20 +933,39 @@ and statementMapper
                         ),
                       _
                     }
-                  )
+                  ),
+                  arguments
                 }
               ),
               Pattern.Identifier (_, {Identifier.name: name})
             ) => (
-              {...context, insideReactCreateClass: Some name},
-              true
+              {...context, insideReactClass: Yes name},
+              Some arguments
             )
-          | _ => (context, false)
+          | _ => (context, None)
           };
         let expr =
           switch init {
           | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
-          | Some e => expressionMapper context::context e
+          | Some e =>
+            switch isReactClassDecl {
+            | Some [
+                Expression.Expression (
+                  _,
+                  Expression.Object {Expression.Object.properties: properties}
+                )
+              ] =>
+              let addPropsDecl = objectContainsKeyName key::"propTypes" properties::properties;
+              let addStateDecl =
+                objectContainsKeyName key::"getInitialState" properties::properties;
+              expressionMapper
+                context::{
+                  ...context,
+                  addPropsAndStateDeclImmediately: Some {addPropsDecl, addStateDecl}
+                }
+                e
+            | _ => expressionMapper context::context e
+            }
           };
         let innerMostExpr =
           switch context.terminalExpr {
@@ -895,7 +978,17 @@ and statementMapper
             Nonrecursive
             [
               parseTreeValueBinding
-                pat::(Pat.var (astHelperStrLidStr (isReactClass ? "comp" : name))) expr::expr
+                pat::(
+                  Pat.var (
+                    astHelperStrLidStr (
+                      switch isReactClassDecl {
+                      | None => name
+                      | Some _ => "comp"
+                      }
+                    )
+                  )
+                )
+                expr::expr
             ]
             innerMostExpr
         | Pattern.Object {Pattern.Object.properties: properties} =>
@@ -1014,9 +1107,44 @@ and statementMapper
               }
             )
           ) =>
-          let context = {...context, insideReactCreateClass: Some className};
+          let addPropsDecl =
+            body |>
+            List.exists (
+              fun property =>
+                switch property {
+                | Class.Body.Property (
+                    _,
+                    {
+                      Class.Property.key:
+                        Expression.Object.Property.Identifier (
+                          _,
+                          {Identifier.name: "props" | "propTypes", _}
+                        )
+                    }
+                  ) =>
+                  true
+                | _ => false
+                }
+            );
+          let addStateDecl =
+            body |>
+            List.exists (
+              fun property =>
+                switch property {
+                | Class.Body.Property (
+                    _,
+                    {
+                      Class.Property.key:
+                        Expression.Object.Property.Identifier (_, {Identifier.name: "state", _})
+                    }
+                  ) =>
+                  true
+                | _ => false
+                }
+            );
+          let context = {...context, insideReactClass: Yes className};
           let hasDisplayNameAlready = ref false;
-          let createClassSpec =
+          let createClassSpecForEs6Class =
             body |>
             /* filter out "props" since we already use propTypes */
             List.filter (
@@ -1046,8 +1174,12 @@ and statementMapper
                     ) =>
                     switch key {
                     | Expression.Object.Property.Identifier (_, {Identifier.name: name, _}) =>
-                      switch (name, static) {
-                      | (name, false) =>
+                      if static {
+                        Cf.val_
+                          (astHelperStrLidStr "staticMethod")
+                          Immutable
+                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                      } else {
                         Cf.method_
                           (astHelperStrLidStr name)
                           Public
@@ -1056,14 +1188,19 @@ and statementMapper
                               Fresh
                               (
                                 Exp.poly
-                                  (functionMapper context::context returnType::None value) None
+                                  (
+                                    functionMapper
+                                      context::{
+                                        ...context,
+                                        addPropsAndStateDeclImmediately:
+                                          Some {addPropsDecl, addStateDecl}
+                                      }
+                                      returnType::None
+                                      value
+                                  )
+                                  None
                               )
                           )
-                      | (name, true) =>
-                        Cf.val_
-                          (astHelperStrLidStr "staticMethod")
-                          Immutable
-                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
                       }
                     | _ =>
                       Cf.val_
@@ -1085,7 +1222,10 @@ and statementMapper
                           (
                             Cfk_concrete
                               Fresh
-                              (expressionMapper context::{...context, insidePropTypes: true} value)
+                              (
+                                expressionMapper
+                                  context::{...context, insideReactClass: InsidePropTypes} value
+                              )
                           )
                       | ("displayName", true, Some value) =>
                         hasDisplayNameAlready := true;
@@ -1163,20 +1303,20 @@ and statementMapper
                   }
                 )
             );
-          let createClassSpec =
+          let createClassSpecForEs6Class =
             !hasDisplayNameAlready ?
-              createClassSpec :
+              createClassSpecForEs6Class :
               [
                 Cf.val_
                   (astHelperStrLidStr "displayName")
                   Immutable
                   (Cfk_concrete Fresh (Exp.constant (Const_string className None))),
-                ...createClassSpec
+                ...createClassSpecForEs6Class
               ];
           let createClassObj =
             Exp.object_
               attrs::[(astHelperStrLidStr "bs", PStr [])]
-              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpec);
+              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpecForEs6Class);
           let expr =
             Exp.apply
               (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createClass"]))
@@ -1256,24 +1396,24 @@ and expressionMapper
           | [] => [("", expUnit)]
           | oneArgOrMore => oneArgOrMore |> List.map (fun arg => ("", arg))
           };
-        switch (callee, context.insideReactCreateClass, arguments) {
+        switch (callee, context.insideReactClass, arguments) {
         | (
             Member {
               Member._object: (_, This),
               property: Member.PropertyIdentifier (_, {Identifier.name: "setState", _}),
               _
             },
-            Some _,
+            Yes _,
             _
           ) =>
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "setState"]))
             [("", Exp.ident (astHelperStrLidIdent ["this"])), ...processArguments arguments]
-        | (_, Some className, [Expression (_, Object {Object.properties: properties})]) =>
-          /* the context insideReactCreateClass is already set by the variable declarator (search declarator)
+        | (_, Yes className, [Expression (_, Object {Object.properties: properties})]) =>
+          /* the context insideReactClass is already set by the variable declarator (search declarator)
              a level above */
           let hasDisplayNameAlready = ref false;
-          let createClassSpec =
+          let createClassSpecForCreateClassDecl =
             properties |>
             List.map (
               fun property =>
@@ -1301,7 +1441,14 @@ and expressionMapper
                               Exp.poly
                                 (
                                   functionMapper
-                                    context::context
+                                    context::(
+                                      /* if the method's getInitialState, tell functionMapper to ignore
+                                         addPropsAndStateDeclImmediately (which uses it to add props and state
+                                         let statements) */
+                                      name == "getInitialState" ?
+                                        {...context, addPropsAndStateDeclImmediately: None} :
+                                        context
+                                    )
                                     returnType::(name == "getInitialState" ? Some "state" : None)
                                     functionWrap
                                 )
@@ -1319,7 +1466,8 @@ and expressionMapper
                               Fresh
                               (
                                 expressionMapper
-                                  context::{...context, insidePropTypes: true} valueWrap
+                                  context::{...context, insideReactClass: InsidePropTypes}
+                                  valueWrap
                               )
                           )
                       | "displayName" =>
@@ -1344,20 +1492,23 @@ and expressionMapper
                   }
                 )
             );
-          let createClassSpec =
+          let createClassSpecForCreateClassDecl =
             !hasDisplayNameAlready ?
-              createClassSpec :
+              createClassSpecForCreateClassDecl :
               [
                 Cf.val_
                   (astHelperStrLidStr "displayName")
                   Immutable
                   (Cfk_concrete Fresh (Exp.constant (Const_string className None))),
-                ...createClassSpec
+                ...createClassSpecForCreateClassDecl
               ];
           let createClassObj =
             Exp.object_
               attrs::[(astHelperStrLidStr "bs", PStr [])]
-              (Cstr.mk (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpec);
+              (
+                Cstr.mk
+                  (Pat.mk (Ppat_var (astHelperStrLidStr "this"))) createClassSpecForCreateClassDecl
+              );
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "createClass"]))
             [("", createClassObj)]
@@ -1590,8 +1741,8 @@ let topStatementsMapper statementWrap => {
     statementMapper
       context::{
         terminalExpr: None,
-        insidePropTypes: false,
-        insideReactCreateClass: None,
+        insideReactClass: Nope,
+        addPropsAndStateDeclImmediately: None,
         reactClassSpecRandomProps: []
       }
       statementWrap;
