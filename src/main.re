@@ -1005,10 +1005,8 @@ and statementMapper
               ],
               Some (_, Expression.Identifier (_, {Identifier.name: "React"}))
             ) =>
-            Exp.letmodule
-              (astHelperStrLidStr correct::false "PropTypes")
-              (Mod.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes"]))
-              innerMostExpr
+            /* if it's let {PropTypes} = React.PropTypes, then ignore it; we don't use it at the end. */
+            innerMostExpr
           | _ =>
             Exp.let_
               Nonrecursive
