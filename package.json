@@ -42,8 +42,8 @@
     ]
   },
   "scripts": {
-    "test": "make test",
-    "start": "eval $(dependencyEnv) && nopam && make && echo '============================' && _build/src/main.native test.js | refmt -use-stdin true -parse binary -print re -is-interface-pp false"
+    "start": "eval $(dependencyEnv) && nopam && make && echo '============================' && _build/src/main.native test.js | refmt -use-stdin true -parse binary -print re -is-interface-pp false",
+    "getReasonAst": "eval $(dependencyEnv) && nopam && refmt -print ast ./getReasonAst.re"
   },
   "devDependencies": {},
   "description": "Flow is a static typechecker for JavaScript. To find out more about Flow, check out [flowtype.org](http://flowtype.org/).",
