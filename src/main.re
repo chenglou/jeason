@@ -888,12 +888,9 @@ and memberMapper
     }
   | Yes _ =>
     switch (_object, property) {
-    | (This, Member.PropertyIdentifier (_, {Identifier.name: "props"})) =>
-      /* we turn `this.props` (assumed to be a react class) into just `props` */
-      /* this wouldn't work well because
-         what about externals? they do need this
-         context.usesProps := true; */
-      Exp.ident (astHelperStrLidIdent ["props"])
+    | (This, Member.PropertyIdentifier (_, {Identifier.name: ("props" | "state") as name})) =>
+      /* we turn `this.props` (assumed to be a react class) into just `props`. Same for `state`. */
+      Exp.ident (astHelperStrLidIdent [name])
     | _ => defaultCase ()
     }
   | Nope => defaultCase ()
