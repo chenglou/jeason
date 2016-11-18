@@ -1,9 +1,0 @@
-[ignore]
-
-[include]
-
-[libs]
-
-[options]
-strip_root=true
-module.system=haste

@@ -1,8 +1,0 @@
-main.js:6
-  6: var b: string = test; // Error: number ~> string
-                     ^^^^ number. This type is incompatible with
-  6: var b: string = test; // Error: number ~> string
-            ^^^^^^ string
-
-
-Found 1 error

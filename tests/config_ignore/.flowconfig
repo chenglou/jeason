@@ -1,8 +1,0 @@
-[ignore]
-<PROJECT_ROOT>/foo.js
-
-[include]
-
-[libs]
-
-[options]

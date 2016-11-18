@@ -1,8 +1,0 @@
-test.js:9
-  9: a.foo = function(): C { return new C(); }
-       ^^^ property `foo`. Property not found in
-  9: a.foo = function(): C { return new C(); }
-     ^ A
-
-
-Found 1 error

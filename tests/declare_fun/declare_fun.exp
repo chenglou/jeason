@@ -1,8 +1,0 @@
-test.js:7
-  7: (foo(false): void); // error, boolean ~/~ undefined
-      ^^^^^^^^^^ boolean. This type is incompatible with
-  7: (foo(false): void); // error, boolean ~/~ undefined
-                  ^^^^ undefined
-
-
-Found 1 error

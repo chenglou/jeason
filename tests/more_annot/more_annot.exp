@@ -1,8 +1,0 @@
-client_object.js:3
-  3: var a:number = o.w.z.y;
-                    ^^^^^^^ string. This type is incompatible with
-  3: var a:number = o.w.z.y;
-           ^^^^^^ number
-
-
-Found 1 error

@@ -1,1 +1,0 @@
-cmd: check --all --strip-root --old-output-format --show-all-errors --traces 10

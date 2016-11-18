@@ -1,8 +1,0 @@
-qux.js:2
-  2: ({ x: "" }: Foo);
-           ^^ string. This type is incompatible with
-  1: export type Foo = { x: number; }
-                            ^^^^^^ number. See: foo.js:1
-
-
-Found 1 error

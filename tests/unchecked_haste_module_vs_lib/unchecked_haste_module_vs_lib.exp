@@ -1,8 +1,0 @@
-test.js:13
- 13: var x: string = buffer.INSPECT_MAX_BYTES; // error, number ~/> string
-                     ^^^^^^^^^^^^^^^^^^^^^^^^ number. This type is incompatible with
- 13: var x: string = buffer.INSPECT_MAX_BYTES; // error, number ~/> string
-            ^^^^^^ string
-
-
-Found 1 error
