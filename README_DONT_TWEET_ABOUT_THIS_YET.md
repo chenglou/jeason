@@ -25,4 +25,10 @@ If you're not familiar with the Reason toolchain, here's how this repo works und
 
 Most files in this codebase are Flow files. We haven't stripped out all the unnecessary parts yet. The only file that matters to us is `src/main.re`, the converter itself.
 
-Check out the `npm start` part: it compiles the converter and calls `_build/src/main.native ./test.js`. `main.re` is a big file (don't be misled by its size; it's mostly pattern matching on all the possible JS AST nodes).
+Check out the `npm start` part: it compiles the converter and calls `_build/src/main.native ./test.js`. `main.re` is a big file (don't be misled by its size! It's mostly pattern matching on all the possible JS AST nodes).
+
+Say you want to convert a variable declaration, e.g. `var a = 1`,  to a Reason let binding, e.g. `let a = 1`.
+
+Note that the first snippet is JS code and the second one is Reason. I wish I could find more distinct examples between the two languages, but unfortunately Reason's syntax is just [too good and familiar](http://facebook.github.io/reason/#syntax-basics). Heck, when your boss comes over and asks "Woah there what's this new language you're writing in?" you can just go "oh that's ES2030 syntax with proper pattern matching and function currying, we're using a Babel transform".
+
+Back on topic, I would first enter the a JS code example `var a = 1` into [ASTExplorer](https://astexplorer.net/#/A8QiKiG0pm), switch to the `flow` parser and check the JS AST on the right. These are the tokens present in `main.re`. Find that case and use OCaml/Reason's built-in [Reason nodes construction mechanisms](http://caml.inria.fr/pub/docs/manual-ocaml/libref/Ast_helper.html) to output the right Reason AST node.
