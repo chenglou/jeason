@@ -192,14 +192,14 @@ let rec convertPropTypeType
             {
               ptyp_loc: default_loc.contents,
               ptyp_attributes: [],
-              ptyp_desc: Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) []
+              ptyp_desc: Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "t"]) []
             }
           ]
       )
     | "symbol" =>
       wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent ["symbolTypeNotSupportedHere"]) [])
     | "any" =>
-      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "magic"]) [])
+      wrapIfNotRequired (Ptyp_constr (astHelperStrLidIdent correct::false ["Obj", "t"]) [])
     | "element" =>
       wrapIfNotRequired (
         Ptyp_constr (astHelperStrLidIdent correct::false ["ReactRe", "reactElement"]) []
@@ -1468,6 +1468,11 @@ and expressionMapper
                                   valueWrap
                               )
                           )
+                      | "mixins" =>
+                        Cf.val_
+                          (astHelperStrLidStr name)
+                          Immutable
+                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
                       | "displayName" =>
                         hasDisplayNameAlready := true;
                         Cf.val_
