@@ -1,16 +1,13 @@
 # Copyright (c) 2013-present, Facebook, Inc.
 # All rights reserved.
 
-################################################################################
-#                            Variables to override                             #
-################################################################################
+###############
 
-EXTRA_INCLUDE_PATHS=
-EXTRA_LIB_PATHS=
+# Hello! You're looking at a fork of flow. Most of these makefile build steps
+# are from Flow (would be nice to trim this down; we only need the flow parser
+# part). The only step we care about is `build-flow`, below.
 
-################################################################################
-#                              OS-dependent stuff                              #
-################################################################################
+###############
 
 OS=$(shell uname -s)
 
@@ -146,6 +143,7 @@ clean:
 	rm -rf bin
 	rm -f hack/utils/get_build_id.gen.c
 
+# This is the part where compile our single file, src/main.re
 build-flow: $(BUILT_OBJECT_FILES) $(FLOWLIB)
 	rebuild -no-links $(INCLUDE_OPTS) $(LIB_OPTS) -lflags "$(LINKER_FLAGS)" -package compiler-libs.common src/main.native
 
