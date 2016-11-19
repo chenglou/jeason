@@ -1,2 +1,0 @@
-cmd: ast --tokens --pretty
-stdin: foo.js

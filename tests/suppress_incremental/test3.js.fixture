@@ -1,4 +1,0 @@
-// @flow
-
-// $FlowIssue
-(123: number);

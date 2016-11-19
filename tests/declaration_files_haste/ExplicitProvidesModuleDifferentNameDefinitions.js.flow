@@ -1,5 +1,0 @@
-/*
- * @providesModule ExplicitProvidesModuleDifferentName
- */
-
-declare export function fun(): number;

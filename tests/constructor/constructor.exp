@@ -1,6 +1,0 @@
-constructor.js:6
-  6:     constructor():number { }
-                       ^^^^^^ number. This type is incompatible with an implicitly-returned undefined.
-
-
-Found 1 error

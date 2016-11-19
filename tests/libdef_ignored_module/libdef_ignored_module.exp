@@ -1,8 +1,0 @@
-test.js:5
-  5: (foo.bar : string); // error number ~> string
-      ^^^^^^^ number. This type is incompatible with
-  5: (foo.bar : string); // error number ~> string
-                ^^^^^^ string
-
-
-Found 1 error
