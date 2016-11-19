@@ -1,4 +1,5 @@
-S hack/**
-S src/**
+S .
 
-B _build/**
+B _build
+
+PKG compiler-libs
