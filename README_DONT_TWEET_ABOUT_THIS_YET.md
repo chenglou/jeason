@@ -9,14 +9,11 @@ Because if this relaxation of constraints, everyone can contribute their favorit
 ## How to Use It
 
 ```sh
-git clone https://github.com/chenglou/jeason.git
-cd jeason
-npm install
-npm run build
-npm start
+npm install -g https://github.com/chenglou/jeason.git
+jeason myFileName.js
 ```
 
-This will take in the `./test.js` file in ths repo and spit out Reason code in the terminal =). Alternatively, you can directly invoke `./_build/src/main.native myFileToConvert.js`
+This will read `myFileName.js` and spit out the converted Reason code in the terminal =).
 
 ## What Is This Black Magic?
 
@@ -24,7 +21,7 @@ If you're not familiar with the Reason toolchain, here's how this repo works und
 
 ## Contributing
 
-This repo is actually a fork of flow, but only its `src/parser/` directory. The only important file that we added is `main.re`, the converter itself.
+This repo is actually a fork of flow, but only its `src/parser/` directory. The only files that we added are `main.re` (core logic), `jeason.sh`, `test.re` and `getReasonAst.re`.
 
 Check out the `npm build` part: it compiles the converter and calls `_build/main.native ./test.js`. `main.re` is a big file (don't be misled by its size! It's mostly pattern matching on all the possible JS AST nodes).
 
@@ -35,5 +32,7 @@ Note that the first snippet is JS code and the second one is Reason. I wish I co
 Back on topic, you'd first enter the a JS code example `var a = 1` into [ASTExplorer](https://astexplorer.net/#/A8QiKiG0pm), switch to the `flow` parser and check the JS AST on the right. These are the tokens present in `main.re`. Find that case and use OCaml/Reason's built-in [Reason nodes construction mechanisms](http://caml.inria.fr/pub/docs/manual-ocaml/libref/Ast_helper.html) to output the right Reason AST node.
 
 How to find the "right Reason AST node"? You can paste `let a = 1;` into `./getReasonAst.re` and run `npm run getReasonAst` to print the AST.
+
+Try your transform by pasting the the JS code snippet into `./test.js`, then run `./jeason.sh ./test.js`.
 
 Send some PRs! It's a crappy converter; as long as your heuristics output nice Reason code, we can accept it =).

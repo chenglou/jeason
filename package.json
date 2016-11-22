@@ -4,17 +4,15 @@
   "license": "BSD-3-Clause",
   "description": "The crappy js-to-reason converter anyone can contribute to!",
   "main": "main.re",
-  "repository": {
-    "private": true
-  },
   "dependencies": {
-    "dependency-env": "https://github.com/npm-ml/dependency-env.git",
-    "nopam": "https://github.com/yunxing/nopam.git",
     "reason": "https://github.com/facebook/reason.git"
   },
+  "bin": {
+    "jeason": "./jeason.sh"
+  },
   "scripts": {
-    "build": "rm -rf ./_build && eval $(dependencyEnv) && nopam && rebuild -no-links -package compiler-libs.common ./main.native",
-    "start": "eval $(dependencyEnv) && nopam && ./_build/main.native ./test.js | refmt -use-stdin true -parse binary -print re -is-interface-pp false",
-    "getReasonAst": "eval $(dependencyEnv) && nopam && refmt -print ast ./getReasonAst.re"
+    "build": "rm -rf ./_build && ./node_modules/reason/_build/ocamlfind/bin/rebuild -no-links -package compiler-libs.common ./main.native",
+    "start": "./jeason.sh ./test.js",
+    "getReasonAst": "eval $(dependencyEnv) && nopam && ./node_modules/reason/refmt_impl.native -print ast ./getReasonAst.re"
   }
 }

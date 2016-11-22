@@ -1894,7 +1894,7 @@ let cat filename => {
 
 let () =
   if (Array.length Sys.argv != 2) {
-    raise (Invalid_argument "Please provide a the JS file to convert over.")
+    raise (Invalid_argument "Please provide as argument the JS file to convert over.")
   } else {
     let file = Sys.argv.(1);
     let parse_options =
