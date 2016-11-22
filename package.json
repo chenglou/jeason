@@ -5,14 +5,17 @@
   "description": "The crappy js-to-reason converter anyone can contribute to!",
   "main": "main.re",
   "dependencies": {
+    "dependency-env": "git+https://github.com/npm-ml/dependency-env.git",
+    "nopam": "git+https://github.com/yunxing/nopam.git",
     "reason": "https://github.com/facebook/reason.git"
   },
   "bin": {
     "jeason": "./jeason.sh"
   },
   "scripts": {
-    "build": "rm -rf ./_build && ./node_modules/reason/_build/ocamlfind/bin/rebuild -no-links -package compiler-libs.common ./main.native",
+    "build": "rm -rf ./_build && mkdir -p ./_build && eval $(dependencyEnv) && nopam && rebuild -no-links -package compiler-libs.common ./main.native",
     "start": "./jeason.sh ./test.js",
-    "getReasonAst": "eval $(dependencyEnv) && nopam && ./node_modules/reason/refmt_impl.native -print ast ./getReasonAst.re"
+    "getReasonAst": "eval $(dependencyEnv) && nopam && ./node_modules/reason/refmt_impl.native -print ast ./getReasonAst.re",
+    "postinstall": "npm run build"
   }
 }
