@@ -736,7 +736,7 @@ and jsxElementMapper
             ("", Exp.array childrenReact)
           ]
       } else {
-        let partialArguments = constructRecordOrLabels (fun name => name);
+        let partialArguments = constructRecordOrLabels (fun name => correctIdentifier name);
         /* add children */
         let arguments = partialArguments @ [("", listToListAst childrenReact)];
         Exp.apply
