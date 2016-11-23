@@ -636,7 +636,9 @@ and functionMapper
     }
   }
 }
-and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
+and literalMapper
+    isNegativeNumber::isNegativeNumber=false
+    {Parser_flow.Ast.Literal.value: value, raw} =>
   Parser_flow.Ast.Literal.(
     switch value {
     | String s => Exp.constant (Const_string s None)
@@ -651,9 +653,9 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
       let intN = int_of_float n;
       /* if it's an integer */
       if (float_of_int intN == n) {
-        Exp.constant (Const_int intN)
+        Exp.constant (Const_int (isNegativeNumber ? - intN : intN))
       } else {
-        Exp.constant (Const_float (string_of_float n))
+        Exp.constant (Const_float (string_of_float (isNegativeNumber ? -. n : n)))
       }
     | RegExp _ => placeholder "regexPlaceholder"
     }
@@ -1271,7 +1273,18 @@ and statementMapper
                               Cfk_concrete
                                 Fresh
                                 (
-                                  Exp.poly (functionMapper returnType::None context::context f) None
+                                  Exp.poly
+                                    (
+                                      functionMapper
+                                        context::{
+                                          ...context,
+                                          addPropsAndStateDeclImmediately:
+                                            Some {addPropsDecl, addStateDecl}
+                                        }
+                                        returnType::None
+                                        f
+                                    )
+                                    None
                                 )
                             )
                         | _ =>
@@ -1408,7 +1421,15 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "setState"]))
             [("", Exp.ident (astHelperStrLidIdent ["this"])), ...processArguments arguments]
-        | (_, Yes className, [Expression (_, Object {Object.properties: properties})]) =>
+        | (
+            Expression.Member {
+              Expression.Member._object: (_, Expression.Identifier (_, "React")),
+              property: Expression.Member.PropertyIdentifier (_, "createClass"),
+              _
+            },
+            Yes className,
+            [Expression (_, Object {Object.properties: properties})]
+          ) =>
           /* the context insideReactClass is already set by the variable declarator (search declarator)
              a level above */
           let hasDisplayNameAlready = ref false;
@@ -1536,23 +1557,34 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["CxRe", "cxRe"]))
             [("", Exp.array (argumentsIntoReasonArguments2 arguments))]
+        | (Identifier (_, "joinClasses"), _, _) =>
+          /* cx is treated differntly; facebook-specific */
+          /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
+          let argumentsIntoReasonArguments2 arguments =>
+            arguments |>
+            List.map (
+              fun argument =>
+                switch argument {
+                | Expression expr => expressionMapper context::context expr
+                | Spread _ => placeholder "unregonizedSpreadInCx"
+                }
+            );
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["JoinClassesRe", "joinClasses"]))
+            [("", Exp.array (argumentsIntoReasonArguments2 arguments))]
         | (Identifier (_, "cssVar"), _, _) =>
-          /* cssVar is also facebook-specific */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["CssVarRe", "cssVarRe"]))
             (processArguments arguments)
         | (Identifier (_, "fbt"), _, _) =>
-          /* same for fbt is also facebook-specific */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["FbtRe", "fbtRe"]))
             (processArguments arguments)
         | (Identifier (_, "invariant"), _, _) =>
-          /* same for invariant */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["InvariantRe", "invariant"]))
             (processArguments arguments)
         | (Identifier (_, "ix"), _, _) =>
-          /* same for invariant */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["IxRe", "ix"]))
             (processArguments arguments)
@@ -1703,17 +1735,33 @@ and expressionMapper
               (Exp.ident (astHelperStrLidIdent ["not"]))
               [("", expressionMapper context::context argumentWrap)]
           }
-        | Unary.Minus
+        | Unary.Minus =>
+          switch argument {
+          | Literal ({Literal.value: Literal.Number _} as lit) =>
+            /* !! is a js idiom for casting to boolean */
+            literalMapper isNegativeNumber::true lit
+          | _ =>
+            Exp.apply
+              (Exp.ident (astHelperStrLidIdent ["~-"]))
+              [("", expressionMapper context::context argumentWrap)]
+          }
         | Unary.Plus
         | Unary.BitNot
         | Unary.Typeof
         | Unary.Void
         | Unary.Delete
-        | Unary.Await => Exp.ident (astHelperStrLidIdent ["unaryPlaceholder"])
+        | Unary.Await =>
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent ["unaryPlaceholder"]))
+            [("", expressionMapper context::context argumentWrap)]
         }
       | Conditional {Conditional.test: test, consequent, alternate} =>
         Exp.match_
-          (expressionMapper context::context test)
+          (
+            Exp.apply
+              (Exp.ident (astHelperStrLidIdent correct::false ["Js", "to_bool"]))
+              [("", expressionMapper context::context test)]
+          )
           [
             {
               pc_lhs: Pat.construct (astHelperStrLidIdent ["true"]) None,
