@@ -833,21 +833,39 @@ and memberMapper
       }
     /* astexplorer flow says foo[bar], bar is an identifier. In reality this flow parses it as an expression */
     | Member.PropertyIdentifier (_, name) =>
-      /* foo.bar => foo##bar; */
-      Exp.apply
-        (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
-        [("", left), ("", Exp.ident (astHelperStrLidIdent [name]))]
-    | Member.PropertyExpression ((_, expr) as exprWrap) =>
-      if computed {
-        /* foo.[bar] => foo.(bar); treat as array */
-        Exp.apply
-          (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
-          [("", left), ("", expressionMapper context::context exprWrap)]
-      } else {
+      switch _object {
+      | Identifier (_, "reactDOM" | "ReactDOM") =>
+        /* ReactDOM.foo -> ReactDOMRe.foo */
+        Exp.ident (astHelperStrLidIdent correct::false ["ReactDOMRe", name])
+      | _ =>
         /* foo.bar => foo##bar; */
         Exp.apply
           (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
-          [("", left), ("", expressionMapper context::context exprWrap)]
+          [("", left), ("", Exp.ident (astHelperStrLidIdent [name]))]
+      }
+    | Member.PropertyExpression ((_, expr) as exprWrap) =>
+      switch _object {
+      | Identifier (_, "reactDOM" | "ReactDOM") =>
+        let name =
+          switch property {
+          | Member.PropertyIdentifier (_, name) => name
+          | _ => "notSureWhatThisIs"
+          };
+        Exp.apply
+          (Exp.ident (astHelperStrLidIdent correct::false ["ReactDOMRe", name]))
+          [("", expressionMapper context::context exprWrap)]
+      | _ =>
+        if computed {
+          /* foo.[bar] => foo.(bar); treat as array */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
+            [("", left), ("", expressionMapper context::context exprWrap)]
+        } else {
+          /* foo.bar => foo##bar; */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
+            [("", left), ("", expressionMapper context::context exprWrap)]
+        }
       }
     }
   };
