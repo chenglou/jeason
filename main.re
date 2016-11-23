@@ -767,42 +767,50 @@ and jsxChildMapper context::context (_, child) =>
 and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties: properties} =>
   Parser_flow.Ast.Expression.Object.(
     Parser_flow.Ast.(
-      Exp.extension (
-        astHelperStrLidStr "bs.obj",
-        PStr [
-          Str.eval (
-            Exp.record
-              (
-                properties |>
-                List.map (
-                  fun property =>
-                    switch property {
-                    | Property (_, {Property.key: key, value}) =>
-                      let keyReason =
-                        switch key {
-                        | Property.Literal (_, {Literal.value: name}) =>
-                          switch name {
-                          | Literal.String s => [s]
-                          | Literal.Boolean b => [string_of_bool b]
-                          | Literal.Null => ["null"]
-                          | Literal.Number n => [string_of_float n]
-                          | Literal.RegExp _ => ["regexAsKeyNotImplementedYet"]
-                          }
-                        | Property.Identifier (_, name) => [name]
-                        | Property.Computed _ => ["notThereYet"]
-                        };
-                      (astHelperStrLidIdent keyReason, expressionMapper context::context value)
-                    | SpreadProperty _ => (
-                        astHelperStrLidIdent ["objectSpreadNotImplementedYet"],
-                        placeholder "objectSpreadNotImplementedYet"
-                      )
-                    }
+      switch properties {
+      | [] =>
+        Exp.extension (
+          astHelperStrLidStr "bs.raw",
+          PStr [Str.eval (Exp.constant (Const_string "{}" None))]
+        )
+      | properties =>
+        Exp.extension (
+          astHelperStrLidStr "bs.obj",
+          PStr [
+            Str.eval (
+              Exp.record
+                (
+                  properties |>
+                  List.map (
+                    fun property =>
+                      switch property {
+                      | Property (_, {Property.key: key, value}) =>
+                        let keyReason =
+                          switch key {
+                          | Property.Literal (_, {Literal.value: name}) =>
+                            switch name {
+                            | Literal.String s => [s]
+                            | Literal.Boolean b => [string_of_bool b]
+                            | Literal.Null => ["null"]
+                            | Literal.Number n => [string_of_float n]
+                            | Literal.RegExp _ => ["regexAsKeyNotImplementedYet"]
+                            }
+                          | Property.Identifier (_, name) => [name]
+                          | Property.Computed _ => ["notThereYet"]
+                          };
+                        (astHelperStrLidIdent keyReason, expressionMapper context::context value)
+                      | SpreadProperty _ => (
+                          astHelperStrLidIdent ["objectSpreadNotImplementedYet"],
+                          placeholder "objectSpreadNotImplementedYet"
+                        )
+                      }
+                  )
                 )
-              )
-              None
-          )
-        ]
-      )
+                None
+            )
+          ]
+        )
+      }
     )
   )
 and memberMapper
