@@ -1623,7 +1623,7 @@ and expressionMapper
                 {
                   pc_lhs: Pat.construct (astHelperStrLidIdent ["false"]) None,
                   pc_guard: None,
-                  pc_rhs: Exp.ident (astHelperStrLidIdent ["Js", "null"])
+                  pc_rhs: Exp.ident (astHelperStrLidIdent correct::false ["Js", "null"])
                 }
               ]
           | _ =>
