@@ -71,7 +71,9 @@ let astHelperStrLidIdent correct::correct=true a =>
 let expUnit = Exp.construct (astHelperStrLidIdent correct::false ["()"]) None;
 
 /* using this as a convenient placeholder output, for checking whether I've matched the js ast correctly */
-let expMarker = Exp.ident (astHelperStrLidIdent ["marker"]);
+let placeholder s => Exp.ident (astHelperStrLidIdent [s]);
+
+let expMarker = placeholder "marker";
 
 let parseTreeValueBinding pat::pat expr::expr => {
   pvb_pat: pat,
@@ -653,7 +655,7 @@ and literalMapper {Parser_flow.Ast.Literal.value: value, raw} =>
       } else {
         Exp.constant (Const_float (string_of_float n))
       }
-    | RegExp _ => Exp.constant (Const_string "regexPlaceholder" None)
+    | RegExp _ => placeholder "regexPlaceholder"
     }
   )
 and jsxElementMapper
@@ -705,15 +707,9 @@ and jsxElementMapper
                 };
               switch name {
               | Attribute.Identifier (_, {Identifier.name: name}) => (f name, valueReason)
-              | Attribute.NamespacedName _ => (
-                  f "NamespacedName",
-                  Exp.constant (Const_string "notImeplementedYet" None)
-                )
+              | Attribute.NamespacedName _ => (f "NamespacedName", placeholder "notImplementedYet")
               }
-            | Opening.SpreadAttribute _ => (
-                f "spreadAttrbute",
-                Exp.constant (Const_string "notImeplementedYet" None)
-              )
+            | Opening.SpreadAttribute _ => (f "spreadAttrbute", placeholder "notImplementedYet")
             }
         );
       if jsxPropHasHyphen {
@@ -745,8 +741,8 @@ and jsxElementMapper
           arguments
       }
     | MemberExpression (_, {MemberExpression._object: _object, property}) =>
-      Exp.constant (Const_string "complexJSXYet" None)
-    | NamespacedName _ => Exp.constant (Const_string "noNameSpaceJSXYet" None)
+      placeholder "complexJSXYet"
+    | NamespacedName _ => placeholder "noNameSpaceJSXYet"
     }
   )
 and jsxChildMapper context::context (_, child) =>
@@ -798,7 +794,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
                       (astHelperStrLidIdent keyReason, expressionMapper context::context value)
                     | SpreadProperty _ => (
                         astHelperStrLidIdent ["objectSpreadNotImplementedYet"],
-                        Exp.constant (Const_string "objectSpreadNotImplementedYet" None)
+                        placeholder "objectSpreadNotImplementedYet"
                       )
                     }
                 )
@@ -1170,7 +1166,7 @@ and statementMapper
                         Cf.val_
                           (astHelperStrLidStr "staticMethod")
                           Immutable
-                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                          (Cfk_concrete Fresh (placeholder "notImplementedYet"))
                       } else {
                         Cf.method_
                           (astHelperStrLidStr name)
@@ -1198,7 +1194,7 @@ and statementMapper
                       Cf.val_
                         (astHelperStrLidStr "complexClassPropKey")
                         Immutable
-                        (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                        (Cfk_concrete Fresh (placeholder "notImplementedYet"))
                     }
                   | Class.Body.Property (
                       _,
@@ -1229,7 +1225,7 @@ and statementMapper
                         Cf.val_
                           (astHelperStrLidStr "staticPropertyOtherThanPropTypes")
                           Immutable
-                          (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                          (Cfk_concrete Fresh (placeholder "notImplementedYet"))
                       | ("state", _, Some value) =>
                         Cf.method_
                           (astHelperStrLidStr "getInitialState")
@@ -1290,7 +1286,7 @@ and statementMapper
                       Cf.val_
                         (astHelperStrLidStr "complexClassPropKey")
                         Immutable
-                        (Cfk_concrete Fresh (Exp.constant (Const_string "NotImplemented" None)))
+                        (Cfk_concrete Fresh (placeholder "notImplementedYet"))
                     }
                   }
                 )
@@ -1323,7 +1319,7 @@ and statementMapper
             /* every react component must be called comp so that we could do Foo.comp on it for JSX */
             [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr "comp")) expr::expr]
             terminal
-        | _ => Exp.constant (Const_string "GeneralClassTransformNotImplementedYet" None)
+        | _ => placeholder "GeneralClassTransformNotImplementedYet"
         }
       | ExportDefaultDeclaration {ExportDefaultDeclaration.declaration: declaration} =>
         switch declaration {
@@ -1358,8 +1354,8 @@ and statementMapper
       | DeclareExportDeclaration _
       | ImportDeclaration _ =>
         switch context.terminalExpr {
-        | None => Exp.constant (Const_string "statementBail" None)
-        | Some expr => Exp.sequence (Exp.constant (Const_string "statementBail" None)) expr
+        | None => placeholder "statementBail"
+        | Some expr => Exp.sequence (placeholder "statementBail") expr
         }
       }
     )
@@ -1381,7 +1377,7 @@ and expressionMapper
             fun argument =>
               switch argument {
               | Expression e => expressionMapper context::context e
-              | Spread (_, _) => Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+              | Spread (_, _) => placeholder "argumentSpreadNotImplementedYet"
               }
           );
         let processArguments arguments =>
@@ -1526,7 +1522,7 @@ and expressionMapper
                   Exp.apply
                     (Exp.ident (astHelperStrLidIdent correct::false ["Obj", "magic"]))
                     [("", expressionMapper context::context expr)]
-                | Spread _ => Exp.constant (Const_string "unregonizedSpreadInCx" None)
+                | Spread _ => placeholder "unregonizedSpreadInCx"
                 }
             );
           Exp.apply
@@ -1607,8 +1603,7 @@ and expressionMapper
             switch element {
             | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
             | Some (Expression e) => expressionMapper context::context e
-            | Some (Spread (_, _)) =>
-              Exp.constant (Const_string "argumentSpreadNotImplementedYet" None)
+            | Some (Spread (_, _)) => placeholder "argumentSpreadNotImplementedYet"
             }
         ) |> Exp.array
       | Binary {Binary.operator: operator, left, right} =>
@@ -1706,7 +1701,7 @@ and expressionMapper
         | Unary.Typeof
         | Unary.Void
         | Unary.Delete
-        | Unary.Await => Exp.constant (Const_string "unaryPlaceholder" None)
+        | Unary.Await => Exp.ident (astHelperStrLidIdent ["unaryPlaceholder"])
         }
       | Conditional {Conditional.test: test, consequent, alternate} =>
         Exp.match_
@@ -1734,7 +1729,7 @@ and expressionMapper
       | Class _
       | TypeCast _
       | Super
-      | MetaProperty _ => Exp.constant (Const_string "expressionPlaceholder" None)
+      | MetaProperty _ => Exp.ident (astHelperStrLidIdent ["expressionPlaceholder"])
       }
     )
   );
