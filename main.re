@@ -1527,7 +1527,12 @@ and expressionMapper
         | (Identifier (_, "invariant"), _, _) =>
           /* same for invariant */
           Exp.apply
-            (Exp.ident (astHelperStrLidIdent correct::false ["invariantRe", "invariant"]))
+            (Exp.ident (astHelperStrLidIdent correct::false ["InvariantRe", "invariant"]))
+            (processArguments arguments)
+        | (Identifier (_, "ix"), _, _) =>
+          /* same for invariant */
+          Exp.apply
+            (Exp.ident (astHelperStrLidIdent correct::false ["IxRe", "ix"]))
             (processArguments arguments)
         | (_, _, _) =>
           Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
@@ -1653,10 +1658,11 @@ and expressionMapper
           let leftReason =
             switch left {
             | Pattern.Expression expr => expressionMapper context::context expr
+            | Pattern.Identifier {Pattern.Identifier.name: (_, name)} =>
+              Exp.ident (astHelperStrLidIdent [name])
             | Pattern.Object _
             | Pattern.Array _
-            | Pattern.Assignment _
-            | Pattern.Identifier _ => expMarker
+            | Pattern.Assignment _ => expMarker
             };
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["#="]))
