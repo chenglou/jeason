@@ -1733,7 +1733,14 @@ and expressionMapper
           | _ =>
             Exp.apply
               (Exp.ident (astHelperStrLidIdent ["not"]))
-              [("", expressionMapper context::context argumentWrap)]
+              [
+                (
+                  "",
+                  Exp.apply
+                    (Exp.ident (astHelperStrLidIdent correct::false ["Js", "to_bool"]))
+                    [("", expressionMapper context::context argumentWrap)]
+                )
+              ]
           }
         | Unary.Minus =>
           switch argument {
