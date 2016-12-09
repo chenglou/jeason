@@ -41,7 +41,7 @@ let correctIdentifier ident => {
   }
 };
 
-let objectContainsKeyName key::key properties::properties =>
+let objectContainsKeyName ::key ::properties =>
   Parser_flow.Ast.Expression.(
     properties |>
     List.exists (
@@ -55,12 +55,12 @@ let objectContainsKeyName key::key properties::properties =>
     )
   );
 
-let astHelperStrLidStr correct::correct=true a => {
+let astHelperStrLidStr ::correct=true a => {
   loc: default_loc.contents,
   txt: correct ? correctIdentifier a : a
 };
 
-let astHelperStrLidIdent correct::correct=true a =>
+let astHelperStrLidIdent ::correct=true a =>
   switch a {
   | [] => raise (Invalid_argument "identifier is empty.")
   | _ =>
@@ -78,7 +78,7 @@ let placeholder s => Exp.ident (astHelperStrLidIdent [s]);
 
 let expMarker = placeholder "marker";
 
-let parseTreeValueBinding pat::pat expr::expr => {
+let parseTreeValueBinding ::pat ::expr => {
   pvb_pat: pat,
   pvb_expr: expr,
   pvb_attributes: [],
@@ -130,12 +130,8 @@ type context = {
   mutable reactClassSpecRandomProps: list (list string)
 };
 
-let rec convertPropTypeType
-        isTopLevel::isTopLevel
-        isForFunctionLabel::isForFunctionLabel
-        wrappedByRequired::wrappedByRequired
-        {pexp_desc} => {
-  let wrapIfNotRequired attrs::attrs=[] ident => {
+let rec convertPropTypeType ::isTopLevel ::isForFunctionLabel ::wrappedByRequired {pexp_desc} => {
+  let wrapIfNotRequired ::attrs=[] ident => {
     let partialResult = {ptyp_loc: default_loc.contents, ptyp_attributes: attrs, ptyp_desc: ident};
     if wrappedByRequired {
       partialResult
@@ -225,8 +221,7 @@ let rec convertPropTypeType
       [(_, expr)] =>
     switch propName {
     | "isRequired" =>
-      convertPropTypeType
-        isTopLevel::false isForFunctionLabel::isForFunctionLabel wrappedByRequired::true expr
+      convertPropTypeType isTopLevel::false ::isForFunctionLabel wrappedByRequired::true expr
     | "oneOfType" => unsupported "oneOfTypeUnSupported"
     | "oneOf" => unsupported "oneOfUnSupported"
     | "objectOf" => unsupported "objectOfUnSupported"
@@ -236,11 +231,7 @@ let rec convertPropTypeType
         Ptyp_constr
           (astHelperStrLidIdent ["array"])
           [
-            convertPropTypeType
-              isTopLevel::false
-              isForFunctionLabel::isForFunctionLabel
-              wrappedByRequired::false
-              expr
+            convertPropTypeType isTopLevel::false ::isForFunctionLabel wrappedByRequired::false expr
           ]
       )
     | "shape" =>
@@ -255,10 +246,7 @@ let rec convertPropTypeType
                   propName,
                   [],
                   convertPropTypeType
-                    isTopLevel::false
-                    isForFunctionLabel::isForFunctionLabel
-                    wrappedByRequired::false
-                    expr
+                    isTopLevel::false ::isForFunctionLabel wrappedByRequired::false expr
                 )
               | _ => (
                   "cannotGenerateType",
@@ -516,7 +504,7 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
 };
 
 let rec statementBlockMapper
-        context::context
+        ::context
         ({Parser_flow.Ast.Statement.Block.body: body}: Parser_flow.Ast.Statement.Block.t)
         :Parsetree.expression =>
   switch body {
@@ -534,8 +522,8 @@ let rec statementBlockMapper
       (List.tl bodyNotEmptyFlipped)
   }
 and functionMapper
-    context::context
-    returnType::returnType
+    ::context
+    ::returnType
     {Parser_flow.Ast.Function.id: id, params: (params, restParam), body, expression, _} => {
   open Parser_flow.Ast;
   /* functionMapper is currently the only one using context.addPropsAndStateDeclImmediately. It wraps around the
@@ -585,9 +573,7 @@ and functionMapper
     }
   }
 }
-and literalMapper
-    isNegativeNumber::isNegativeNumber=false
-    {Parser_flow.Ast.Literal.value: value, raw} =>
+and literalMapper ::isNegativeNumber=false {Parser_flow.Ast.Literal.value: value, raw} =>
   Parser_flow.Ast.Literal.(
     switch value {
     | String s => Exp.constant (Const_string s None)
@@ -610,7 +596,7 @@ and literalMapper
     }
   )
 and jsxElementMapper
-    context::context
+    ::context
     {
       Parser_flow.Ast.JSX.openingElement: (
         _,
@@ -636,7 +622,7 @@ and jsxElementMapper
             }
         );
       let childrenReact =
-        children |> List.map (fun child => jsxChildMapper context::context child) |> keepSome;
+        children |> List.map (fun child => jsxChildMapper ::context child) |> keepSome;
       let constructRecordOrLabels f =>
         attributes |>
         List.map (
@@ -652,7 +638,7 @@ and jsxElementMapper
                     Attribute.ExpressionContainer _ {ExpressionContainer.expression: expression}
                   ) =>
                   switch expression {
-                  | ExpressionContainer.Expression expr => expressionMapper context::context expr
+                  | ExpressionContainer.Expression expr => expressionMapper ::context expr
                   | ExpressionContainer.EmptyExpression _ => expUnit
                   }
                 };
@@ -696,13 +682,13 @@ and jsxElementMapper
     | NamespacedName _ => placeholder "noNameSpaceJSXYet"
     }
   )
-and jsxChildMapper context::context (_, child) =>
+and jsxChildMapper ::context (_, child) =>
   Parser_flow.Ast.JSX.(
     switch child {
-    | Parser_flow.Ast.JSX.Element element => Some (jsxElementMapper context::context element)
+    | Parser_flow.Ast.JSX.Element element => Some (jsxElementMapper ::context element)
     | Parser_flow.Ast.JSX.ExpressionContainer {ExpressionContainer.expression: expression} =>
       switch expression {
-      | ExpressionContainer.Expression expr => Some (expressionMapper context::context expr)
+      | ExpressionContainer.Expression expr => Some (expressionMapper ::context expr)
       | ExpressionContainer.EmptyExpression _ => Some expUnit
       }
     | Parser_flow.Ast.JSX.Text {Text.value: value, _} =>
@@ -715,7 +701,7 @@ and jsxChildMapper context::context (_, child) =>
       }
     }
   )
-and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties: properties} =>
+and objectMapper ::context {Parser_flow.Ast.Expression.Object.properties: properties} =>
   Parser_flow.Ast.Expression.Object.(
     Parser_flow.Ast.(
       switch properties {
@@ -749,7 +735,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
                           | Property.Identifier (_, name) => [name]
                           | Property.Computed _ => ["notThereYet"]
                           };
-                        (astHelperStrLidIdent keyReason, expressionMapper context::context value)
+                        (astHelperStrLidIdent keyReason, expressionMapper ::context value)
                       | SpreadProperty _ => (
                           astHelperStrLidIdent ["objectSpreadNotImplementedYet"],
                           placeholder "objectSpreadNotImplementedYet"
@@ -765,7 +751,7 @@ and objectMapper context::context {Parser_flow.Ast.Expression.Object.properties:
     )
   )
 and memberMapper
-    context::context
+    ::context
     {Parser_flow.Ast.Expression.Member._object: (_, _object) as objectWrap, property, computed} => {
   /* heuristics: if it's Foo.bar, transform into Foo.bar in ocaml (module property). If it's foo.bar,
      transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
@@ -774,7 +760,7 @@ and memberMapper
   open Parser_flow.Ast;
   open Parser_flow.Ast.Expression;
   let defaultCase () => {
-    let left = expressionMapper context::context objectWrap;
+    let left = expressionMapper ::context objectWrap;
     switch property {
     | Member.PropertyExpression ((_, Literal {Literal.value: Literal.Number n}) as expr) =>
       /* foo[1] => foo.(1); */
@@ -784,7 +770,7 @@ and memberMapper
           (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
           [("", left), ("", Exp.constant (Const_int intN))]
       } else {
-        expressionMapper context::context expr
+        expressionMapper ::context expr
       }
     /* astexplorer flow says foo[bar], bar is an identifier. In reality this flow parses it as an expression */
     | Member.PropertyIdentifier (_, name) =>
@@ -808,18 +794,18 @@ and memberMapper
           };
         Exp.apply
           (Exp.ident (astHelperStrLidIdent correct::false ["ReactDOMRe", name]))
-          [("", expressionMapper context::context exprWrap)]
+          [("", expressionMapper ::context exprWrap)]
       | _ =>
         if computed {
           /* foo.[bar] => foo.(bar); treat as array */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["Array", "get"]))
-            [("", left), ("", expressionMapper context::context exprWrap)]
+            [("", left), ("", expressionMapper ::context exprWrap)]
         } else {
           /* foo.bar => foo##bar; */
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["##"]))
-            [("", left), ("", expressionMapper context::context exprWrap)]
+            [("", left), ("", expressionMapper ::context exprWrap)]
         }
       }
     }
@@ -832,7 +818,7 @@ and memberMapper
       | "isRequired" =>
         Exp.apply
           (Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", name]))
-          [("", expressionMapper context::context objectWrap)]
+          [("", expressionMapper ::context objectWrap)]
       | "oneOfType"
       | "oneOf"
       | "objectOf"
@@ -851,7 +837,7 @@ and memberMapper
         Exp.ident (astHelperStrLidIdent correct::false ["ReactRe", "PropTypes", "object_"])
       | unrecognizedPropName => defaultCase ()
       }
-    | Member.PropertyExpression expr => expressionMapper context::context expr
+    | Member.PropertyExpression expr => expressionMapper ::context expr
     }
   | Yes _ =>
     switch (_object, property) {
@@ -863,10 +849,7 @@ and memberMapper
   | Nope => defaultCase ()
   }
 }
-and statementMapper
-    context::context
-    ((_, statement): Parser_flow.Ast.Statement.t)
-    :Parsetree.expression =>
+and statementMapper ::context ((_, statement): Parser_flow.Ast.Statement.t) :Parsetree.expression =>
   Parser_flow.Ast.Statement.(
     Parser_flow.Ast.(
       switch statement {
@@ -904,7 +887,7 @@ and statementMapper
         let expr =
           switch init {
           | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
-          | Some e => expressionMapper context::context e
+          | Some e => expressionMapper ::context e
           };
         let innerMostExpr =
           switch context.terminalExpr {
@@ -927,7 +910,7 @@ and statementMapper
                     )
                   )
                 )
-                expr::expr
+                ::expr
             ]
             innerMostExpr
         | Pattern.Object {Pattern.Object.properties: properties} =>
@@ -950,7 +933,7 @@ and statementMapper
               Nonrecursive
               [
                 parseTreeValueBinding
-                  pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) expr::expr
+                  pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) ::expr
               ]
               innerMostExpr
           }
@@ -961,7 +944,7 @@ and statementMapper
             Nonrecursive
             [
               parseTreeValueBinding
-                pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) expr::expr
+                pat::(Pat.constant (Const_string "destructuringNotImplemented" None)) ::expr
             ]
             innerMostExpr
         }
@@ -970,7 +953,7 @@ and statementMapper
         let result =
           switch argument {
           | None => expUnit
-          | Some expr => expressionMapper context::context expr
+          | Some expr => expressionMapper ::context expr
           };
         switch context.terminalExpr {
         | None => result
@@ -978,13 +961,13 @@ and statementMapper
         }
       | Expression {Statement.Expression.expression: expression} =>
         switch context.terminalExpr {
-        | None => expressionMapper context::context expression
-        | Some expr => Exp.sequence (expressionMapper context::context expression) expr
+        | None => expressionMapper ::context expression
+        | Some expr => Exp.sequence (expressionMapper ::context expression) expr
         }
       | If {If.test: test, consequent, alternate} =>
         let result =
           Exp.ifthenelse
-            (expressionMapper context::context test)
+            (expressionMapper ::context test)
             (statementMapper context::{...context, terminalExpr: None} consequent)
             (
               switch alternate {
@@ -997,7 +980,7 @@ and statementMapper
         | None => result
         | Some expr => Exp.sequence result expr
         }
-      | Block body => statementBlockMapper context::context body
+      | Block body => statementBlockMapper ::context body
       | FunctionDeclaration functionWrap =>
         let funcName =
           switch functionWrap.Function.id {
@@ -1014,7 +997,7 @@ and statementMapper
           [
             parseTreeValueBinding
               pat::(Pat.var (astHelperStrLidStr funcName))
-              expr::(functionMapper context::context returnType::None functionWrap)
+              expr::(functionMapper ::context returnType::None functionWrap)
           ]
           innerMostExpr
       | Empty =>
@@ -1086,10 +1069,7 @@ and statementMapper
                           (
                             Cfk_concrete
                               Fresh
-                              (
-                                Exp.poly
-                                  (functionMapper context::context returnType::None value) None
-                              )
+                              (Exp.poly (functionMapper ::context returnType::None value) None)
                           )
                       }
                     | _ =>
@@ -1122,7 +1102,7 @@ and statementMapper
                         Cf.val_
                           (astHelperStrLidStr name)
                           Immutable
-                          (Cfk_concrete Fresh (expressionMapper context::context value))
+                          (Cfk_concrete Fresh (expressionMapper ::context value))
                       | (_, true, _) =>
                         Cf.val_
                           (astHelperStrLidStr "staticPropertyOtherThanPropTypes")
@@ -1147,7 +1127,7 @@ and statementMapper
                                       )
                                       (
                                         Exp.constraint_
-                                          (expressionMapper context::context value)
+                                          (expressionMapper ::context value)
                                           (Typ.constr (astHelperStrLidIdent ["state"]) [])
                                       )
                                   )
@@ -1163,16 +1143,13 @@ and statementMapper
                             Public
                             (
                               Cfk_concrete
-                                Fresh
-                                (
-                                  Exp.poly (functionMapper context::context returnType::None f) None
-                                )
+                                Fresh (Exp.poly (functionMapper ::context returnType::None f) None)
                             )
                         | _ =>
                           Cf.val_
                             (astHelperStrLidStr name)
                             Mutable
-                            (Cfk_concrete Fresh (expressionMapper context::context value))
+                            (Cfk_concrete Fresh (expressionMapper ::context value))
                         }
                       | (name, _, None) =>
                         Cf.val_
@@ -1219,19 +1196,19 @@ and statementMapper
           Exp.let_
             Nonrecursive
             /* every react component must be called comp so that we could do Foo.comp on it for JSX */
-            [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr "comp")) expr::expr]
+            [parseTreeValueBinding pat::(Pat.var (astHelperStrLidStr "comp")) ::expr]
             terminal
         | _ => placeholder "GeneralClassTransformNotImplementedYet"
         }
       | ExportDefaultDeclaration {ExportDefaultDeclaration.declaration: declaration} =>
         switch declaration {
-        | ExportDefaultDeclaration.Declaration decl => statementMapper context::context decl
-        | ExportDefaultDeclaration.Expression expr => expressionMapper context::context expr
+        | ExportDefaultDeclaration.Declaration decl => statementMapper ::context decl
+        | ExportDefaultDeclaration.Expression expr => expressionMapper ::context expr
         }
       | ExportNamedDeclaration {ExportNamedDeclaration.declaration: declaration} =>
         switch declaration {
         | None => expUnit
-        | Some statement => statementMapper context::context statement
+        | Some statement => statementMapper ::context statement
         }
       | Labeled _
       | Break _
@@ -1263,22 +1240,22 @@ and statementMapper
     )
   )
 and expressionMapper
-    context::context
+    ::context
     ((_, expression): Parser_flow.Ast.Expression.t)
     :Parsetree.expression =>
   Parser_flow.Ast.(
     Parser_flow.Ast.Expression.(
       switch expression {
-      | Object obj => objectMapper context::context obj
+      | Object obj => objectMapper ::context obj
       | ArrowFunction functionWrap
-      | Function functionWrap => functionMapper context::context returnType::None functionWrap
+      | Function functionWrap => functionMapper ::context returnType::None functionWrap
       | Call {Call.callee: (_, callee) as calleeWrap, arguments} =>
         let argumentsIntoReasonArguments arguments =>
           arguments |>
           List.map (
             fun argument =>
               switch argument {
-              | Expression e => expressionMapper context::context e
+              | Expression e => expressionMapper ::context e
               | Spread (_, _) => placeholder "argumentSpreadNotImplementedYet"
               }
           );
@@ -1342,7 +1319,7 @@ and expressionMapper
                               Exp.poly
                                 (
                                   functionMapper
-                                    context::context
+                                    ::context
                                     returnType::(name == "getInitialState" ? Some "state" : None)
                                     functionWrap
                                 )
@@ -1368,18 +1345,18 @@ and expressionMapper
                         Cf.val_
                           (astHelperStrLidStr name)
                           Immutable
-                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
+                          (Cfk_concrete Fresh (expressionMapper ::context valueWrap))
                       | "displayName" =>
                         hasDisplayNameAlready := true;
                         Cf.val_
                           (astHelperStrLidStr name)
                           Immutable
-                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
+                          (Cfk_concrete Fresh (expressionMapper ::context valueWrap))
                       | name =>
                         Cf.val_
                           (astHelperStrLidStr name)
                           Mutable
-                          (Cfk_concrete Fresh (expressionMapper context::context valueWrap))
+                          (Cfk_concrete Fresh (expressionMapper ::context valueWrap))
                       }
                     }
                   | Property _
@@ -1420,11 +1397,11 @@ and expressionMapper
               fun argument =>
                 switch argument {
                 | Expression ((_, Literal {Literal.value: value}) as expr) =>
-                  expressionMapper context::context expr
+                  expressionMapper ::context expr
                 | Expression expr =>
                   Exp.apply
                     (Exp.ident (astHelperStrLidIdent correct::false ["Obj", "magic"]))
-                    [("", expressionMapper context::context expr)]
+                    [("", expressionMapper ::context expr)]
                 | Spread _ => placeholder "unregonizedSpreadInCx"
                 }
             );
@@ -1439,7 +1416,7 @@ and expressionMapper
             List.map (
               fun argument =>
                 switch argument {
-                | Expression expr => expressionMapper context::context expr
+                | Expression expr => expressionMapper ::context expr
                 | Spread _ => placeholder "unregonizedSpreadInCx"
                 }
             );
@@ -1463,11 +1440,11 @@ and expressionMapper
             (Exp.ident (astHelperStrLidIdent correct::false ["IxRe", "ix"]))
             (processArguments arguments)
         | (_, _, _) =>
-          Exp.apply (expressionMapper context::context calleeWrap) (processArguments arguments)
+          Exp.apply (expressionMapper ::context calleeWrap) (processArguments arguments)
         }
       | Identifier (_, name) => Exp.ident (astHelperStrLidIdent [name])
       | Literal lit => literalMapper lit
-      | Member member => memberMapper context::context member
+      | Member member => memberMapper ::context member
       | This => Exp.ident (astHelperStrLidIdent ["this"])
       | Logical {Logical.operator: operator, left: leftWrap, right: (_, right) as rightWrap} =>
         /* warning: BuckleScript boolean and js boolean aren't the same! */
@@ -1479,20 +1456,20 @@ and expressionMapper
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["||"]))
             [
-              ("", toBool (expressionMapper context::context leftWrap)),
-              ("", toBool (expressionMapper context::context rightWrap))
+              ("", toBool (expressionMapper ::context leftWrap)),
+              ("", toBool (expressionMapper ::context rightWrap))
             ]
         | Logical.And =>
           /* common pattern: `show && <Foo />`. Transpile to `show ? <Foo /> : Js.null` */
           switch right {
           | JSXElement _ =>
             Exp.match_
-              (toBool (expressionMapper context::context leftWrap))
+              (toBool (expressionMapper ::context leftWrap))
               [
                 {
                   pc_lhs: Pat.construct (astHelperStrLidIdent ["true"]) None,
                   pc_guard: None,
-                  pc_rhs: expressionMapper context::context rightWrap
+                  pc_rhs: expressionMapper ::context rightWrap
                 },
                 {
                   pc_lhs: Pat.construct (astHelperStrLidIdent ["false"]) None,
@@ -1504,19 +1481,19 @@ and expressionMapper
             Exp.apply
               (Exp.ident (astHelperStrLidIdent correct::false ["&&"]))
               [
-                ("", toBool (expressionMapper context::context leftWrap)),
-                ("", toBool (expressionMapper context::context rightWrap))
+                ("", toBool (expressionMapper ::context leftWrap)),
+                ("", toBool (expressionMapper ::context rightWrap))
               ]
           }
         }
-      | JSXElement element => jsxElementMapper context::context element
+      | JSXElement element => jsxElementMapper ::context element
       | Array {Array.elements: elements} =>
         elements |>
         List.map (
           fun element =>
             switch element {
             | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
-            | Some (Expression e) => expressionMapper context::context e
+            | Some (Expression e) => expressionMapper ::context e
             | Some (Spread (_, _)) => placeholder "argumentSpreadNotImplementedYet"
             }
         ) |> Exp.array
@@ -1551,18 +1528,15 @@ and expressionMapper
         | (Binary.Equal, (_, Literal {Literal.value: Literal.Null}), _) =>
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["Js", "Null_undefined", "test"]))
-            [("", expressionMapper context::context right)]
+            [("", expressionMapper ::context right)]
         | (Binary.Equal, _, (_, Literal {Literal.value: Literal.Null})) =>
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["Js", "Null_undefined", "test"]))
-            [("", expressionMapper context::context left)]
+            [("", expressionMapper ::context left)]
         | _ =>
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false [operatorReason]))
-            [
-              ("", expressionMapper context::context left),
-              ("", expressionMapper context::context right)
-            ]
+            [("", expressionMapper ::context left), ("", expressionMapper ::context right)]
         }
       | Assignment {Assignment.operator: operator, left: (_, left), right} =>
         /* let innerMostExpr =
@@ -1584,7 +1558,7 @@ and expressionMapper
           /* TODO: this is redundant with what's above */
           let leftReason =
             switch left {
-            | Pattern.Expression expr => expressionMapper context::context expr
+            | Pattern.Expression expr => expressionMapper ::context expr
             | Pattern.Identifier {Pattern.Identifier.name: (_, name)} =>
               Exp.ident (astHelperStrLidIdent [name])
             | Pattern.Object _
@@ -1593,7 +1567,7 @@ and expressionMapper
             };
           Exp.apply
             (Exp.ident (astHelperStrLidIdent correct::false ["#="]))
-            [("", leftReason), ("", expressionMapper context::context right)]
+            [("", leftReason), ("", expressionMapper ::context right)]
         }
       | Unary {Unary.operator: operator, prefix, argument: (_, argument) as argumentWrap} =>
         switch operator {
@@ -1603,7 +1577,7 @@ and expressionMapper
             /* !! is a js idiom for casting to boolean */
             Exp.apply
               (Exp.ident (astHelperStrLidIdent ["pleaseWriteAIsTruthyFunction"]))
-              [("", expressionMapper context::context innerArgument)]
+              [("", expressionMapper ::context innerArgument)]
           | _ =>
             Exp.apply
               (Exp.ident (astHelperStrLidIdent ["not"]))
@@ -1612,7 +1586,7 @@ and expressionMapper
                   "",
                   Exp.apply
                     (Exp.ident (astHelperStrLidIdent correct::false ["Js", "to_bool"]))
-                    [("", expressionMapper context::context argumentWrap)]
+                    [("", expressionMapper ::context argumentWrap)]
                 )
               ]
           }
@@ -1624,7 +1598,7 @@ and expressionMapper
           | _ =>
             Exp.apply
               (Exp.ident (astHelperStrLidIdent ["~-"]))
-              [("", expressionMapper context::context argumentWrap)]
+              [("", expressionMapper ::context argumentWrap)]
           }
         | Unary.Plus
         | Unary.BitNot
@@ -1634,25 +1608,25 @@ and expressionMapper
         | Unary.Await =>
           Exp.apply
             (Exp.ident (astHelperStrLidIdent ["unaryPlaceholder"]))
-            [("", expressionMapper context::context argumentWrap)]
+            [("", expressionMapper ::context argumentWrap)]
         }
       | Conditional {Conditional.test: test, consequent, alternate} =>
         Exp.match_
           (
             Exp.apply
               (Exp.ident (astHelperStrLidIdent correct::false ["Js", "to_bool"]))
-              [("", expressionMapper context::context test)]
+              [("", expressionMapper ::context test)]
           )
           [
             {
               pc_lhs: Pat.construct (astHelperStrLidIdent ["true"]) None,
               pc_guard: None,
-              pc_rhs: expressionMapper context::context consequent
+              pc_rhs: expressionMapper ::context consequent
             },
             {
               pc_lhs: Pat.construct (astHelperStrLidIdent ["false"]) None,
               pc_guard: None,
-              pc_rhs: expressionMapper context::context alternate
+              pc_rhs: expressionMapper ::context alternate
             }
           ]
       | Sequence _
@@ -1864,8 +1838,7 @@ let () =
            };
     let content = cat file;
     let (ast, _) =
-      Parser_flow.program_file
-        fail::false parse_options::parse_options content (Some (Loc.SourceFile file));
+      Parser_flow.program_file fail::false ::parse_options content (Some (Loc.SourceFile file));
     let (_, statements, _) = ast;
     output_string stdout Config.ast_impl_magic_number;
     output_value stdout file;
