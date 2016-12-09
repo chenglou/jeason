@@ -124,12 +124,9 @@ type insideReactClass =
   | InsidePropTypes
   | Yes string;
 
-type addPropsAndStateDeclImmediately = {addPropsDecl: bool, addStateDecl: bool};
-
 type context = {
   terminalExpr: option Parsetree.expression,
   insideReactClass: insideReactClass,
-  addPropsAndStateDeclImmediately: option addPropsAndStateDeclImmediately,
   mutable reactClassSpecRandomProps: list (list string)
 };
 
@@ -305,18 +302,19 @@ let propTypesToActualTypes fields => {
 
      to:
 
-     type props =
-     Js.t <
+     type props = {
        inner : int,
-       something : Js.null_undefined string,
-       children : Js.null_undefined ReactRe.reactElement
-     >;
+       something : option string,
+       children : option ReactRe.reactElement
+     };
 
-     external props : inner::int =>
-      something::Js.null_undefined string? =>
-      children::Js.null_undefined ReactRe.reactElement? =>
-      unit =>
-      'reactJsProps = "" [@@bs.obj]; */
+     let jsPropsToReasonProps (jsProps: jsPropsType) :props => {
+       inner : jsProps##inner,
+       something : Js.Null_undefined.to_opt jsProps##something,
+       children : Js.Null_undefined.to_opt jsProps##children
+     };
+
+     not all implemented yet. */
   let convertedFieldsForProps =
     fields |>
     List.map (
@@ -498,38 +496,17 @@ let attemptToGenerateStateRecord initialStateDeclaration => {
               | Lident txt => txt
               | _ => "cannotConvertStateKeyOver"
               };
-            (
-              label,
-              [],
+            Type.field
+              (astHelperStrLidStr label)
               {
                 ptyp_loc: default_loc.contents,
                 ptyp_attributes: [],
                 ptyp_desc:
                   Ptyp_constr (astHelperStrLidIdent ["pleaseFillTheTypeForThisKeyManually"]) []
               }
-            )
           }
         );
-      Str.type_ [
-        Type.mk
-          kind::Ptype_abstract
-          priv::Public
-          manifest::{
-            ptyp_loc: default_loc.contents,
-            ptyp_attributes: [],
-            ptyp_desc:
-              Ptyp_constr
-                {loc: default_loc.contents, txt: Ldot (Lident "Js") "t"}
-                [
-                  {
-                    ptyp_loc: default_loc.contents,
-                    ptyp_attributes: [],
-                    ptyp_desc: Ptyp_object fields Closed
-                  }
-                ]
-          }
-          (astHelperStrLidStr "state")
-      ]
+      Str.type_ [Type.mk kind::(Ptype_record fields) (astHelperStrLidStr "state")]
     | None => bailType
     }
   | _ =>
@@ -565,39 +542,8 @@ and functionMapper
      function in props and state declaration. don't forget to unset `context.addPropsAndStateDeclImmediately`; */
   let bodyReason =
     switch body {
-    | Function.BodyExpression expression =>
-      expressionMapper context::{...context, addPropsAndStateDeclImmediately: None} expression
-    | Function.BodyBlock (_, body) =>
-      statementBlockMapper context::{...context, addPropsAndStateDeclImmediately: None} body
-    };
-  let bodyReason =
-    switch context.addPropsAndStateDeclImmediately {
-    | None => bodyReason
-    | Some {addPropsDecl, addStateDecl} =>
-      let wrap isProp body =>
-        Exp.let_
-          Nonrecursive
-          [
-            parseTreeValueBinding
-              pat::(Pat.var (astHelperStrLidStr (isProp ? "props" : "state")))
-              expr::(
-                Exp.constraint_
-                  (
-                    Exp.apply
-                      (
-                        Exp.ident (
-                          astHelperStrLidIdent
-                            correct::false ["ReactRe", isProp ? "getProps" : "getState"]
-                        )
-                      )
-                      [("", Exp.ident (astHelperStrLidIdent correct::false ["this"]))]
-                  )
-                  (Typ.constr (astHelperStrLidIdent [isProp ? "props" : "state"]) [])
-              )
-          ]
-          body;
-      let bodyReason = addStateDecl ? wrap false bodyReason : bodyReason;
-      addPropsDecl ? wrap true bodyReason : bodyReason
+    | Function.BodyExpression expression => expressionMapper context expression
+    | Function.BodyBlock (_, body) => statementBlockMapper context body
     };
   let wrapBodyInReturnType body =>
     switch returnType {
@@ -958,25 +904,7 @@ and statementMapper
         let expr =
           switch init {
           | None => Exp.construct (astHelperStrLidIdent correct::false ["None"]) None
-          | Some e =>
-            switch isReactClassDecl {
-            | Some [
-                Expression.Expression (
-                  _,
-                  Expression.Object {Expression.Object.properties: properties}
-                )
-              ] =>
-              let addPropsDecl = objectContainsKeyName key::"propTypes" properties::properties;
-              let addStateDecl =
-                objectContainsKeyName key::"getInitialState" properties::properties;
-              expressionMapper
-                context::{
-                  ...context,
-                  addPropsAndStateDeclImmediately: Some {addPropsDecl, addStateDecl}
-                }
-                e
-            | _ => expressionMapper context::context e
-            }
+          | Some e => expressionMapper context::context e
           };
         let innerMostExpr =
           switch context.terminalExpr {
@@ -1115,35 +1043,6 @@ and statementMapper
               }
             )
           ) =>
-          let addPropsDecl =
-            body |>
-            List.exists (
-              fun property =>
-                switch property {
-                | Class.Body.Property (
-                    _,
-                    {
-                      Class.Property.key:
-                        Expression.Object.Property.Identifier (_, "props" | "propTypes")
-                    }
-                  ) =>
-                  true
-                | _ => false
-                }
-            );
-          let addStateDecl =
-            body |>
-            List.exists (
-              fun property =>
-                switch property {
-                | Class.Body.Property (
-                    _,
-                    {Class.Property.key: Expression.Object.Property.Identifier (_, "state")}
-                  ) =>
-                  true
-                | _ => false
-                }
-            );
           let context = {...context, insideReactClass: Yes className};
           let hasDisplayNameAlready = ref false;
           let createClassSpecForEs6Class =
@@ -1189,17 +1088,7 @@ and statementMapper
                               Fresh
                               (
                                 Exp.poly
-                                  (
-                                    functionMapper
-                                      context::{
-                                        ...context,
-                                        addPropsAndStateDeclImmediately:
-                                          Some {addPropsDecl, addStateDecl}
-                                      }
-                                      returnType::None
-                                      value
-                                  )
-                                  None
+                                  (functionMapper context::context returnType::None value) None
                               )
                           )
                       }
@@ -1276,18 +1165,7 @@ and statementMapper
                               Cfk_concrete
                                 Fresh
                                 (
-                                  Exp.poly
-                                    (
-                                      functionMapper
-                                        context::{
-                                          ...context,
-                                          addPropsAndStateDeclImmediately:
-                                            Some {addPropsDecl, addStateDecl}
-                                        }
-                                        returnType::None
-                                        f
-                                    )
-                                    None
+                                  Exp.poly (functionMapper context::context returnType::None f) None
                                 )
                             )
                         | _ =>
@@ -1464,14 +1342,7 @@ and expressionMapper
                               Exp.poly
                                 (
                                   functionMapper
-                                    context::(
-                                      /* if the method's getInitialState, tell functionMapper to ignore
-                                         addPropsAndStateDeclImmediately (which uses it to add props and state
-                                         let statements) */
-                                      name == "getInitialState" ?
-                                        {...context, addPropsAndStateDeclImmediately: None} :
-                                        context
-                                    )
+                                    context::context
                                     returnType::(name == "getInitialState" ? Some "state" : None)
                                     functionWrap
                                 )
@@ -1806,12 +1677,7 @@ and expressionMapper
 let topStatementsMapper statementWrap => {
   let {pexp_desc, _} =
     statementMapper
-      context::{
-        terminalExpr: None,
-        insideReactClass: Nope,
-        addPropsAndStateDeclImmediately: None,
-        reactClassSpecRandomProps: []
-      }
+      context::{terminalExpr: None, insideReactClass: Nope, reactClassSpecRandomProps: []}
       statementWrap;
   switch pexp_desc {
   | Pexp_let _ valueBindings {pexp_desc, _} =>
