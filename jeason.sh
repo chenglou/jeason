@@ -23,4 +23,4 @@ SCRIPTDIR="$( cd -P "$( dirname "$THISSCRIPT" )" && pwd )"
 
 SOURCE=$(pwd)/$1
 
-cd $SCRIPTDIR; ./_build/main.native $SOURCE | ./node_modules/reason/refmt_impl.native -use-stdin true -parse binary -print re -is-interface-pp false
+cd $SCRIPTDIR; ./_build/main.native $SOURCE | refmt --parse binary --print re

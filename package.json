@@ -7,7 +7,7 @@
   "dependencies": {
     "dependency-env": "git+https://github.com/npm-ml/dependency-env.git",
     "nopam": "git+https://github.com/yunxing/nopam.git",
-    "reason": "https://github.com/facebook/reason.git#7cc89888add262a5699cf74802d112f08a4b86a8"
+    "reason": "https://github.com/facebook/reason.git#595db4c5a08e4f5dbe9090152f95720155110a86"
   },
   "bin": {
     "jeason": "./jeason.sh"
