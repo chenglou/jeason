@@ -23,6 +23,8 @@ If you're not familiar with the Reason toolchain, here's how this repo works und
 
 This repo is actually a fork of flow, but only its `src/parser/` directory. The only files that we added are `main.re` (core logic), `jeason.sh`, `test.re` and `getReasonAst.re`.
 
+In order to make it work, you will need to install Reason globally (see ["Global Installation"](https://reasonml.github.io/guide/editor-tools/global-installation) in the official Reason docs).
+
 Check out the `npm build` part: it compiles the converter and calls `_build/main.native ./test.js`. `main.re` is a big file (don't be misled by its size! It's mostly pattern matching on all the possible JS AST nodes).
 
 Say you want to convert a variable declaration, e.g. `var a = 1`,  to a Reason let binding, e.g. `let a = 1`.
