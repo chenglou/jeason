@@ -4,17 +4,14 @@
   "license": "BSD-3-Clause",
   "description": "The crappy js-to-reason converter anyone can contribute to!",
   "main": "main.re",
-  "dependencies": {
-    "dependency-env": "git+https://github.com/npm-ml/dependency-env.git",
-    "nopam": "git+https://github.com/yunxing/nopam.git"
-  },
+  "dependencies": {},
   "bin": {
     "jeason": "./jeason.sh"
   },
   "scripts": {
-    "build": "rm -rf ./_build && mkdir -p ./_build && eval $(dependencyEnv) && nopam && rebuild -no-links -package compiler-libs.common ./main.native",
+    "build": "rm -rf ./_build && mkdir -p ./_build && rebuild -no-links -package compiler-libs.common ./main.native",
     "start": "./jeason.sh ./test.js",
-    "getReasonAst": "eval $(dependencyEnv) && nopam && refmt --print ast ./getReasonAst.re",
+    "getReasonAst": "refmt --print ast ./getReasonAst.re",
     "postinstall": "npm run build"
   }
 }
