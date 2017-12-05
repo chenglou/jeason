@@ -14,7 +14,7 @@
   "scripts": {
     "build": "rm -rf ./_build && mkdir -p ./_build && eval $(dependencyEnv) && nopam && rebuild -no-links -package compiler-libs.common ./main.native",
     "start": "./jeason.sh ./test.js",
-    "getReasonAst": "eval $(dependencyEnv) && nopam && ./node_modules/reason/refmt_impl.native -print ast ./getReasonAst.re",
+    "getReasonAst": "eval $(dependencyEnv) && nopam && refmt --print ast ./getReasonAst.re",
     "postinstall": "npm run build"
   }
 }
