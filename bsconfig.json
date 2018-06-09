@@ -1,0 +1,25 @@
+{
+  "name": "jeason",
+  "sources": ".",
+  "entries": [{
+    "backend": "bytecode",
+    "main-module": "Main",
+    "generators" : [
+      {
+        "name" : "ocamllex",
+        "edge" : ["lexer_flow.ml", ":", "lexer_flow.mll"]
+      }
+    ]
+  }],
+  "warnings": {
+    "number": "-40-20-21-26-27-28-32-45-44-33-37-34-39-6"
+  },
+  "ocaml-dependencies": ["unix", "compiler-libs"],
+  "refmt": 3,
+  "generators" : [
+    {
+      "name" : "ocamlyacc",
+      "command": "ocamlyacc $in"
+    }
+  ],
+}

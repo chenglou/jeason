@@ -17,3 +17,8 @@ flow.docdir
 *~
 /hack/utils/get_build_id.gen.c
 /flowlib.rc
+
+# added by jeason
+.merlin
+lexer_flow.ml
+/lib/

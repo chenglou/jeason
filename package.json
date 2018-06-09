@@ -9,9 +9,14 @@
     "jeason": "./jeason.sh"
   },
   "scripts": {
-    "build": "rm -rf ./_build && mkdir -p ./_build && rebuild -no-links -package compiler-libs.common ./main.native",
-    "start": "./jeason.sh ./test.js",
+    "build": "bsb -make-world",
+    "start-dont-use-has-bug-for-now": "bsb -make-world -w",
+    "clean": "bsb -clean-world",
+    "test": "./jeason.sh ./test.js",
     "getReasonAst": "refmt --print ast ./getReasonAst.re",
     "postinstall": "npm run build"
+  },
+  "devDependencies": {
+    "bs-platform": "bsansouci/bsb-native"
   }
 }
