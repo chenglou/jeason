@@ -1535,19 +1535,13 @@ and expressionMapper =
       | Member(member) => memberMapper(~context, member)
       | This => Exp.ident(astHelperStrLidIdent(["this"]))
       | Logical({Logical.operator, left: leftWrap, right: (_, right) as rightWrap}) =>
-        /* warning: BuckleScript boolean and js boolean aren't the same! */
-        let toBool = (expr) =>
-          Exp.apply(
-            Exp.ident(astHelperStrLidIdent(~correct=false, ["Js", "to_bool"])),
-            [("", expr)]
-          );
         switch operator {
         | Logical.Or =>
           Exp.apply(
             Exp.ident(astHelperStrLidIdent(~correct=false, ["||"])),
             [
-              ("", toBool(expressionMapper(~context, leftWrap))),
-              ("", toBool(expressionMapper(~context, rightWrap)))
+              ("", (expressionMapper(~context, leftWrap))),
+              ("", (expressionMapper(~context, rightWrap)))
             ]
           )
         | Logical.And =>
@@ -1555,7 +1549,7 @@ and expressionMapper =
           switch right {
           | JSXElement(_) =>
             Exp.match(
-              toBool(expressionMapper(~context, leftWrap)),
+              (expressionMapper(~context, leftWrap)),
               [
                 {
                   pc_lhs: Pat.construct(astHelperStrLidIdent(["true"]), None),
@@ -1573,8 +1567,8 @@ and expressionMapper =
             Exp.apply(
               Exp.ident(astHelperStrLidIdent(~correct=false, ["&&"])),
               [
-                ("", toBool(expressionMapper(~context, leftWrap))),
-                ("", toBool(expressionMapper(~context, rightWrap)))
+                ("", (expressionMapper(~context, leftWrap))),
+                ("", (expressionMapper(~context, rightWrap)))
               ]
             )
           }
@@ -1683,11 +1677,7 @@ and expressionMapper =
               [
                 (
                   "",
-                  Exp.apply(
-                    Exp.ident(astHelperStrLidIdent(~correct=false, ["Js", "to_bool"])),
-                    [("", expressionMapper(~context, argumentWrap))]
-                  )
-                )
+expressionMapper(~context, argumentWrap)                )
               ]
             )
           }
@@ -1715,11 +1705,7 @@ and expressionMapper =
         }
       | Conditional({Conditional.test, consequent, alternate}) =>
         Exp.match(
-          Exp.apply(
-            Exp.ident(astHelperStrLidIdent(~correct=false, ["Js", "to_bool"])),
-            [("", expressionMapper(~context, test))]
-          ),
-          [
+expressionMapper(~context, test),          [
             {
               pc_lhs: Pat.construct(astHelperStrLidIdent(["true"]), None),
               pc_guard: None,
