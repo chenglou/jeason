@@ -1,10 +1,9 @@
 open Ast_helper;
-
 open Asttypes;
-
 open Parsetree;
-
 open Longident;
+
+open Belt;
 
 /* helpers */
 /* TODO: turn foo_bar into foo_bar_ */
@@ -42,7 +41,7 @@ let correctIdentifier = ident => {
 let objectContainsKeyName = (~key, ~properties) =>
   Parser_flow.Ast.Expression.(
     properties
-    |> List.exists(property =>
+    |. List.getBy(property =>
          switch (property) {
          | Object.Property((
              _,
@@ -53,7 +52,8 @@ let objectContainsKeyName = (~key, ~properties) =>
          | _ => false
          }
        )
-  );
+  )
+  != None;
 
 let astHelperStrLidStr = (~correct=true, a) => {
   loc: default_loc.contents,
@@ -65,13 +65,13 @@ let astHelperStrLidIdent = (~correct=true, a) =>
   | [] => raise(Invalid_argument("identifier is empty."))
   | _ =>
     let inner =
-      Lident(correct ? correctIdentifier(List.hd(a)) : List.hd(a));
+      Lident(
+        correct ? correctIdentifier(List.headExn(a)) : List.headExn(a),
+      );
     let res =
-      List.tl(a)
-      |> List.fold_left(
-           (acc, curr) =>
-             Ldot(acc, correct ? correctIdentifier(curr) : curr),
-           inner,
+      List.tailExn(a)
+      |. List.reduce(inner, (acc, curr) =>
+           Ldot(acc, correct ? correctIdentifier(curr) : curr)
          );
     {loc: default_loc.contents, txt: res};
   };
@@ -91,21 +91,6 @@ let parseTreeValueBinding = (~pat, ~expr) => {
   pvb_loc: default_loc.contents,
 };
 
-let keepSome = lst =>
-  lst
-  |> List.filter(a =>
-       switch (a) {
-       | None => false
-       | _ => true
-       }
-     )
-  |> List.map(a =>
-       switch (a) {
-       | None => assert(false)
-       | Some(a) => a
-       }
-     );
-
 let listToListAst = lst => {
   let nullList =
     Exp.construct(astHelperStrLidIdent(~correct=false, ["[]"]), None);
@@ -113,14 +98,12 @@ let listToListAst = lst => {
   switch (lst) {
   | [] => nullList
   | oneItemOrMore =>
-    List.rev(oneItemOrMore)
-    |> List.fold_left(
-         (accumExp, expr) =>
-           Exp.construct(
-             astHelperStrLidIdent(~correct=false, ["::"]),
-             Some(Exp.tuple([expr, accumExp])),
-           ),
-         nullList,
+    List.reverse(oneItemOrMore)
+    |. List.reduce(nullList, (accumExp, expr) =>
+         Exp.construct(
+           astHelperStrLidIdent(~correct=false, ["::"]),
+           Some(Exp.tuple([expr, accumExp])),
+         )
        )
   };
 };
@@ -320,36 +303,33 @@ let rec convertPropTypeType =
               },
             ]),
           )) =>
-          fields
-          |> List.map((({txt}, expr)) =>
-               switch (txt) {
-               | Lident(propName) => (
-                   propName,
-                   [],
-                   convertPropTypeType(
-                     ~isTopLevel=false,
-                     ~isForFunctionLabel,
-                     ~wrappedByRequired=false,
-                     expr,
-                   ),
-                 )
-               | _ => (
-                   "cannotGenerateType",
-                   [],
-                   {
-                     ptyp_loc: default_loc.contents,
-                     ptyp_attributes: [],
-                     ptyp_desc:
-                       Ptyp_constr(
-                         astHelperStrLidIdent([
-                           "forComplexPropTypesObjectKey",
-                         ]),
-                         [],
-                       ),
-                   },
-                 )
-               }
-             )
+          List.map(fields, (({txt}, expr)) =>
+            switch (txt) {
+            | Lident(propName) => (
+                propName,
+                [],
+                convertPropTypeType(
+                  ~isTopLevel=false,
+                  ~isForFunctionLabel,
+                  ~wrappedByRequired=false,
+                  expr,
+                ),
+              )
+            | _ => (
+                "cannotGenerateType",
+                [],
+                {
+                  ptyp_loc: default_loc.contents,
+                  ptyp_attributes: [],
+                  ptyp_desc:
+                    Ptyp_constr(
+                      astHelperStrLidIdent(["forComplexPropTypesObjectKey"]),
+                      [],
+                    ),
+                },
+              )
+            }
+          )
         | _ => []
         };
       wrapIfNotRequired(
@@ -395,37 +375,36 @@ let propTypesToActualTypes = fields => {
 
      not all implemented yet. */
   let convertedFieldsForProps =
-    fields
-    |> List.map((({txt}, expr)) =>
-         switch (txt) {
-         | Lident(propName) => (
-             propName,
-             [],
-             convertPropTypeType(
-               ~isTopLevel=true,
-               ~isForFunctionLabel=false,
-               ~wrappedByRequired=false,
-               expr,
-             ),
-           )
-         | _ => (
-             "cannotGenerateType",
-             [],
-             {
-               ptyp_loc: default_loc.contents,
-               ptyp_attributes: [],
-               ptyp_desc:
-                 Ptyp_constr(
-                   {
-                     loc: default_loc.contents,
-                     txt: Lident("forComplexPropTypesObjectKey"),
-                   },
-                   [],
-                 ),
-             },
-           )
-         }
-       );
+    List.map(fields, (({txt}, expr)) =>
+      switch (txt) {
+      | Lident(propName) => (
+          propName,
+          [],
+          convertPropTypeType(
+            ~isTopLevel=true,
+            ~isForFunctionLabel=false,
+            ~wrappedByRequired=false,
+            expr,
+          ),
+        )
+      | _ => (
+          "cannotGenerateType",
+          [],
+          {
+            ptyp_loc: default_loc.contents,
+            ptyp_attributes: [],
+            ptyp_desc:
+              Ptyp_constr(
+                {
+                  loc: default_loc.contents,
+                  txt: Lident("forComplexPropTypesObjectKey"),
+                },
+                [],
+              ),
+          },
+        )
+      }
+    );
   let propsObjType =
     Str.type_([
       Type.mk(
@@ -469,8 +448,9 @@ let propTypesToActualTypes = fields => {
   };
   let externalTypeInner =
     fields
-    |> List.rev
-    |> List.fold_left(
+    |. List.reverse
+    |. List.reduce(
+         inner,
          (acc, ({txt}, {pexp_desc} as expr)) => {
            let topLevelIsRequired =
              switch (pexp_desc) {
@@ -512,7 +492,6 @@ let propTypesToActualTypes = fields => {
                ),
            };
          },
-         inner,
        );
   let externalType =
     Str.primitive({
@@ -618,28 +597,30 @@ let attemptToGenerateStateRecord = initialStateDeclaration => {
     switch (innerMostExpr(a)) {
     | Some(returnExpression) =>
       let fields =
-        returnExpression
-        |> List.map((({txt}, {pexp_desc})) => {
-             let label =
-               switch (txt) {
-               | Lident(txt) => txt
-               | _ => "cannotConvertStateKeyOver"
-               };
-             Type.field(
-               astHelperStrLidStr(label),
-               {
-                 ptyp_loc: default_loc.contents,
-                 ptyp_attributes: [],
-                 ptyp_desc:
-                   Ptyp_constr(
-                     astHelperStrLidIdent([
-                       "pleaseFillTheTypeForThisKeyManually",
-                     ]),
-                     [],
-                   ),
-               },
-             );
-           });
+        List.map(
+          returnExpression,
+          (({txt}, {pexp_desc})) => {
+            let label =
+              switch (txt) {
+              | Lident(txt) => txt
+              | _ => "cannotConvertStateKeyOver"
+              };
+            Type.field(
+              astHelperStrLidStr(label),
+              {
+                ptyp_loc: default_loc.contents,
+                ptyp_attributes: [],
+                ptyp_desc:
+                  Ptyp_constr(
+                    astHelperStrLidIdent([
+                      "pleaseFillTheTypeForThisKeyManually",
+                    ]),
+                    [],
+                  ),
+              },
+            );
+          },
+        );
       Str.type_([
         Type.mk(~kind=Ptype_record(fields), astHelperStrLidStr("state")),
       ]);
@@ -660,19 +641,17 @@ let rec statementBlockMapper =
   switch (body) {
   | [] => expUnit
   | bodyNotEmpty =>
-    let bodyNotEmptyFlipped = List.rev(bodyNotEmpty);
+    let bodyNotEmptyFlipped = List.reverse(bodyNotEmpty);
     let lastItemReason =
-      List.hd(bodyNotEmptyFlipped)
+      List.headExn(bodyNotEmptyFlipped)
       |> statementMapper(~context={...context, terminalExpr: None});
-    List.fold_left(
-      (accumExp, statement) =>
-        statementMapper(
-          ~context={...context, terminalExpr: Some(accumExp)},
-          statement,
-        ),
-      lastItemReason,
-      List.tl(bodyNotEmptyFlipped),
-    );
+    List.tailExn(bodyNotEmptyFlipped)
+    |. List.reduce(lastItemReason, (accumExp, statement) =>
+         statementMapper(
+           ~context={...context, terminalExpr: Some(accumExp)},
+           statement,
+         )
+       );
   }
 and functionMapper =
     (
@@ -714,29 +693,22 @@ and functionMapper =
     )
   | [(_, first), ...rest] =>
     let partialResult =
-      List.rev(rest)
-      |> List.fold_left(
-           (expr', (_, param)) =>
-             switch (param) {
-             | Pattern.Identifier({Pattern.Identifier.name: (_, name)}) =>
-               Exp.fun_(
-                 "",
-                 None,
-                 Pat.construct(astHelperStrLidIdent([name]), None),
-                 expr',
-               )
-             | Pattern.Object(_)
-             | Pattern.Array(_)
-             | Pattern.Assignment(_)
-             | Pattern.Expression(_) =>
-               Exp.fun_(
-                 "",
-                 None,
-                 Pat.var(astHelperStrLidStr("fixme")),
-                 expr',
-               )
-             },
-           bodyReason,
+      List.reverse(rest)
+      |. List.reduce(bodyReason, (expr', (_, param)) =>
+           switch (param) {
+           | Pattern.Identifier({Pattern.Identifier.name: (_, name)}) =>
+             Exp.fun_(
+               "",
+               None,
+               Pat.construct(astHelperStrLidIdent([name]), None),
+               expr',
+             )
+           | Pattern.Object(_)
+           | Pattern.Array(_)
+           | Pattern.Assignment(_)
+           | Pattern.Expression(_) =>
+             Exp.fun_("", None, Pat.var(astHelperStrLidStr("fixme")), expr')
+           }
          );
     switch (first) {
     | Pattern.Identifier({Pattern.Identifier.name: (_, name)}) =>
@@ -803,66 +775,61 @@ and jsxElementMapper =
     switch (name) {
     | Identifier((_, {Identifier.name})) =>
       let jsxPropHasHyphen =
-        attributes
-        |> List.exists(attr =>
-             switch (attr) {
-             | Opening.Attribute((
-                 _,
-                 {
-                   Attribute.name:
-                     Attribute.Identifier((_, {Identifier.name})),
-                 },
-               )) =>
-               String.contains(name, '-')
-             | _ => false
-             }
-           );
+        List.getBy(attributes, attr =>
+          switch (attr) {
+          | Opening.Attribute((
+              _,
+              {
+                Attribute.name: Attribute.Identifier((_, {Identifier.name})),
+              },
+            )) =>
+            String.contains(name, '-')
+          | _ => false
+          }
+        );
       let childrenReact =
-        children
-        |> List.map(child => jsxChildMapper(~context, child))
-        |> keepSome;
+        children |. List.keepMap(child => jsxChildMapper(~context, child));
       let constructRecordOrLabels = f =>
-        attributes
-        |> List.map(attr =>
-             switch (attr) {
-             | Opening.Attribute((_, {Attribute.name, value})) =>
-               /* JSX's <Foo checked /> is sugar for <Foo checked={true} />. What a waste */
-               let valueReason =
-                 switch (value) {
-                 | None =>
-                   Exp.ident(
-                     astHelperStrLidIdent(~correct=false, ["Js", "true_"]),
-                   )
-                 | Some(Attribute.Literal(_, lit)) => literalMapper(lit)
-                 | Some(
-                     Attribute.ExpressionContainer(
-                       _,
-                       {ExpressionContainer.expression},
-                     ),
-                   ) =>
-                   switch (expression) {
-                   | ExpressionContainer.Expression(expr) =>
-                     expressionMapper(~context, expr)
-                   | ExpressionContainer.EmptyExpression(_) => expUnit
-                   }
-                 };
-               switch (name) {
-               | Attribute.Identifier((_, {Identifier.name})) => (
-                   f(name),
-                   valueReason,
-                 )
-               | Attribute.NamespacedName(_) => (
-                   f("NamespacedName"),
-                   placeholder("notImplementedYet"),
-                 )
-               };
-             | Opening.SpreadAttribute(_) => (
-                 f("spreadAttrbute"),
-                 placeholder("notImplementedYet"),
-               )
-             }
-           );
-      if (jsxPropHasHyphen) {
+        List.map(attributes, attr =>
+          switch (attr) {
+          | Opening.Attribute((_, {Attribute.name, value})) =>
+            /* JSX's <Foo checked /> is sugar for <Foo checked={true} />. What a waste */
+            let valueReason =
+              switch (value) {
+              | None =>
+                Exp.ident(
+                  astHelperStrLidIdent(~correct=false, ["Js", "true_"]),
+                )
+              | Some(Attribute.Literal(_, lit)) => literalMapper(lit)
+              | Some(
+                  Attribute.ExpressionContainer(
+                    _,
+                    {ExpressionContainer.expression},
+                  ),
+                ) =>
+                switch (expression) {
+                | ExpressionContainer.Expression(expr) =>
+                  expressionMapper(~context, expr)
+                | ExpressionContainer.EmptyExpression(_) => expUnit
+                }
+              };
+            switch (name) {
+            | Attribute.Identifier((_, {Identifier.name})) => (
+                f(name),
+                valueReason,
+              )
+            | Attribute.NamespacedName(_) => (
+                f("NamespacedName"),
+                placeholder("notImplementedYet"),
+              )
+            };
+          | Opening.SpreadAttribute(_) => (
+              f("spreadAttrbute"),
+              placeholder("notImplementedYet"),
+            )
+          }
+        );
+      if (jsxPropHasHyphen != None) {
         /* if there's a hyphen (e.g. aria-label) then we can't transform it into a jsx function label (invalid syntax). We'll
            have to take a shortcut and use a bs.obj instead */
         let jsObj =
@@ -947,37 +914,32 @@ and objectMapper = (~context, {Parser_flow.Ast.Expression.Object.properties}) =>
           PStr([
             Str.eval(
               Exp.record(
-                properties
-                |> List.map(property =>
-                     switch (property) {
-                     | Property((_, {Property.key, value})) =>
-                       let keyReason =
-                         switch (key) {
-                         | Property.Literal((_, {Literal.value: name})) =>
-                           switch (name) {
-                           | Literal.String(s) => [s]
-                           | Literal.Boolean(b) => [string_of_bool(b)]
-                           | Literal.Null => ["null"]
-                           | Literal.Number(n) => [string_of_float(n)]
-                           | Literal.RegExp(_) => [
-                               "regexAsKeyNotImplementedYet",
-                             ]
-                           }
-                         | Property.Identifier((_, name)) => [name]
-                         | Property.Computed(_) => ["notThereYet"]
-                         };
-                       (
-                         astHelperStrLidIdent(keyReason),
-                         expressionMapper(~context, value),
-                       );
-                     | SpreadProperty(_) => (
-                         astHelperStrLidIdent([
-                           "objectSpreadNotImplementedYet",
-                         ]),
-                         placeholder("objectSpreadNotImplementedYet"),
-                       )
-                     }
-                   ),
+                List.map(properties, property =>
+                  switch (property) {
+                  | Property((_, {Property.key, value})) =>
+                    let keyReason =
+                      switch (key) {
+                      | Property.Literal((_, {Literal.value: name})) =>
+                        switch (name) {
+                        | Literal.String(s) => [s]
+                        | Literal.Boolean(b) => [string_of_bool(b)]
+                        | Literal.Null => ["null"]
+                        | Literal.Number(n) => [string_of_float(n)]
+                        | Literal.RegExp(_) => ["regexAsKeyNotImplementedYet"]
+                        }
+                      | Property.Identifier((_, name)) => [name]
+                      | Property.Computed(_) => ["notThereYet"]
+                      };
+                    (
+                      astHelperStrLidIdent(keyReason),
+                      expressionMapper(~context, value),
+                    );
+                  | SpreadProperty(_) => (
+                      astHelperStrLidIdent(["objectSpreadNotImplementedYet"]),
+                      placeholder("objectSpreadNotImplementedYet"),
+                    )
+                  }
+                ),
                 None,
               ),
             ),
@@ -999,6 +961,7 @@ and memberMapper =
      transform into foo##bar, which BuckleScript will pick up and compile (back) into dot. Will we reach
      a fixed point lol? */
   /* TODO: actually implement this */
+
   open Parser_flow.Ast;
   open Parser_flow.Ast.Expression;
   let defaultCase = () => {
@@ -1135,7 +1098,7 @@ and statementMapper =
           _,
           {Statement.VariableDeclaration.Declarator.id: (_, id), init},
         ) =
-          List.hd(declarations);
+          List.headExn(declarations);
         /* check if it's a let foo = React.createClass */
         let (context, isReactClassDecl) =
           switch (init, id) {
@@ -1341,25 +1304,24 @@ and statementMapper =
           let context = {...context, insideReactClass: Yes(className)};
           let hasDisplayNameAlready = ref(false);
           let createClassSpecForEs6Class =
-            body
             /* filter out "props" since we already use propTypes */
-            |> List.filter(property =>
-                 switch (property) {
-                 | Class.Body.Property((
-                     _,
-                     {
-                       Class.Property.key:
-                         Expression.Object.Property.Identifier((_, "props")),
-                       value,
-                       typeAnnotation,
-                       static,
-                     },
-                   )) =>
-                   false
-                 | _ => true
-                 }
-               )
-            |> List.map(property =>
+            List.keep(body, property =>
+              switch (property) {
+              | Class.Body.Property((
+                  _,
+                  {
+                    Class.Property.key:
+                      Expression.Object.Property.Identifier((_, "props")),
+                    value,
+                    typeAnnotation,
+                    static,
+                  },
+                )) =>
+                false
+              | _ => true
+              }
+            )
+            |. List.map(property =>
                  Parser_flow.Ast.(
                    switch (property) {
                    | Class.Body.Method((
@@ -1642,20 +1604,19 @@ and expressionMapper =
         functionMapper(~context, ~returnType=None, functionWrap)
       | Call({Call.callee: (_, callee) as calleeWrap, arguments}) =>
         let argumentsIntoReasonArguments = arguments =>
-          arguments
-          |> List.map(argument =>
-               switch (argument) {
-               | Expression(e) => expressionMapper(~context, e)
-               | Spread((_, _)) =>
-                 placeholder("argumentSpreadNotImplementedYet")
-               }
-             );
+          List.map(arguments, argument =>
+            switch (argument) {
+            | Expression(e) => expressionMapper(~context, e)
+            | Spread((_, _)) =>
+              placeholder("argumentSpreadNotImplementedYet")
+            }
+          );
         let processArguments = arguments =>
           /* see Expression.Function above: */
           /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
           switch (argumentsIntoReasonArguments(arguments)) {
           | [] => [("", expUnit)]
-          | oneArgOrMore => oneArgOrMore |> List.map(arg => ("", arg))
+          | oneArgOrMore => oneArgOrMore |. List.map(arg => ("", arg))
           };
         switch (callee, context.insideReactClass, arguments) {
         | (
@@ -1693,99 +1654,98 @@ and expressionMapper =
              a level above */
           let hasDisplayNameAlready = ref(false);
           let createClassSpecForCreateClassDecl =
-            properties
-            |> List.map(property =>
-                 Object.(
-                   switch (property) {
-                   | Property((
-                       _,
-                       {
-                         Property.key: Property.Identifier((_, name)),
-                         value: (_, value) as valueWrap,
-                         kind: Property.Init,
-                         _,
-                       },
-                     )) =>
-                     switch (value) {
-                     | Function(functionWrap)
-                     | ArrowFunction(functionWrap) =>
-                       Cf.method(
-                         astHelperStrLidStr(name),
-                         Public,
-                         Cfk_concrete(
-                           Fresh,
-                           Exp.poly(
-                             functionMapper(
-                               ~context,
-                               ~returnType=
-                                 name == "getInitialState" ?
-                                   Some("state") : None,
-                               functionWrap,
-                             ),
-                             None,
-                           ),
-                         ),
-                       )
-                     | _ =>
-                       switch (name) {
-                       | "propTypes" =>
-                         Cf.val_(
-                           astHelperStrLidStr(name),
-                           Immutable,
-                           Cfk_concrete(
-                             Fresh,
-                             expressionMapper(
-                               ~context={
-                                 ...context,
-                                 insideReactClass: InsidePropTypes,
-                               },
-                               valueWrap,
-                             ),
-                           ),
-                         )
-                       | "mixins" =>
-                         Cf.val_(
-                           astHelperStrLidStr(name),
-                           Immutable,
-                           Cfk_concrete(
-                             Fresh,
-                             expressionMapper(~context, valueWrap),
-                           ),
-                         )
-                       | "displayName" =>
-                         hasDisplayNameAlready := true;
-                         Cf.val_(
-                           astHelperStrLidStr(name),
-                           Immutable,
-                           Cfk_concrete(
-                             Fresh,
-                             expressionMapper(~context, valueWrap),
-                           ),
-                         );
-                       | name =>
-                         Cf.val_(
-                           astHelperStrLidStr(name),
-                           Mutable,
-                           Cfk_concrete(
-                             Fresh,
-                             expressionMapper(~context, valueWrap),
-                           ),
-                         )
-                       }
-                     }
-                   | Property(_)
-                   | SpreadProperty(_) =>
-                     Cf.val_(
-                       astHelperStrLidStr("notSureWhat"),
-                       Immutable,
-                       Cfk_concrete(
-                         Fresh,
-                         Exp.ident(astHelperStrLidIdent(["thisIs"])),
-                       ),
-                     )
-                   }
-                 )
-               );
+            List.map(properties, property =>
+              Object.(
+                switch (property) {
+                | Property((
+                    _,
+                    {
+                      Property.key: Property.Identifier((_, name)),
+                      value: (_, value) as valueWrap,
+                      kind: Property.Init,
+                      _,
+                    },
+                  )) =>
+                  switch (value) {
+                  | Function(functionWrap)
+                  | ArrowFunction(functionWrap) =>
+                    Cf.method(
+                      astHelperStrLidStr(name),
+                      Public,
+                      Cfk_concrete(
+                        Fresh,
+                        Exp.poly(
+                          functionMapper(
+                            ~context,
+                            ~returnType=
+                              name == "getInitialState" ?
+                                Some("state") : None,
+                            functionWrap,
+                          ),
+                          None,
+                        ),
+                      ),
+                    )
+                  | _ =>
+                    switch (name) {
+                    | "propTypes" =>
+                      Cf.val_(
+                        astHelperStrLidStr(name),
+                        Immutable,
+                        Cfk_concrete(
+                          Fresh,
+                          expressionMapper(
+                            ~context={
+                              ...context,
+                              insideReactClass: InsidePropTypes,
+                            },
+                            valueWrap,
+                          ),
+                        ),
+                      )
+                    | "mixins" =>
+                      Cf.val_(
+                        astHelperStrLidStr(name),
+                        Immutable,
+                        Cfk_concrete(
+                          Fresh,
+                          expressionMapper(~context, valueWrap),
+                        ),
+                      )
+                    | "displayName" =>
+                      hasDisplayNameAlready := true;
+                      Cf.val_(
+                        astHelperStrLidStr(name),
+                        Immutable,
+                        Cfk_concrete(
+                          Fresh,
+                          expressionMapper(~context, valueWrap),
+                        ),
+                      );
+                    | name =>
+                      Cf.val_(
+                        astHelperStrLidStr(name),
+                        Mutable,
+                        Cfk_concrete(
+                          Fresh,
+                          expressionMapper(~context, valueWrap),
+                        ),
+                      )
+                    }
+                  }
+                | Property(_)
+                | SpreadProperty(_) =>
+                  Cf.val_(
+                    astHelperStrLidStr("notSureWhat"),
+                    Immutable,
+                    Cfk_concrete(
+                      Fresh,
+                      Exp.ident(astHelperStrLidIdent(["thisIs"])),
+                    ),
+                  )
+                }
+              )
+            );
           let createClassSpecForCreateClassDecl =
             hasDisplayNameAlready^ ?
               createClassSpecForCreateClassDecl :
@@ -1821,24 +1781,20 @@ and expressionMapper =
           /* cx is treated differntly; facebook-specific */
           /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
           let argumentsIntoReasonArguments2 = arguments =>
-            arguments
-            |> List.map(argument =>
-                 switch (argument) {
-                 | Expression((_, Literal({Literal.value})) as expr) =>
-                   expressionMapper(~context, expr)
-                 | Expression(expr) =>
-                   Exp.apply(
-                     Exp.ident(
-                       astHelperStrLidIdent(
-                         ~correct=false,
-                         ["Obj", "magic"],
-                       ),
-                     ),
-                     [("", expressionMapper(~context, expr))],
-                   )
-                 | Spread(_) => placeholder("unregonizedSpreadInCx")
-                 }
-               );
+            List.map(arguments, argument =>
+              switch (argument) {
+              | Expression((_, Literal({Literal.value})) as expr) =>
+                expressionMapper(~context, expr)
+              | Expression(expr) =>
+                Exp.apply(
+                  Exp.ident(
+                    astHelperStrLidIdent(~correct=false, ["Obj", "magic"]),
+                  ),
+                  [("", expressionMapper(~context, expr))],
+                )
+              | Spread(_) => placeholder("unregonizedSpreadInCx")
+              }
+            );
           Exp.apply(
             Exp.ident(
               astHelperStrLidIdent(~correct=false, ["CxRe", "cxRe"]),
@@ -1849,13 +1805,12 @@ and expressionMapper =
           /* cx is treated differntly; facebook-specific */
           /* turns cx('a', 'b') into Cx.cxRe [|'a', 'b'|] */
           let argumentsIntoReasonArguments2 = arguments =>
-            arguments
-            |> List.map(argument =>
-                 switch (argument) {
-                 | Expression(expr) => expressionMapper(~context, expr)
-                 | Spread(_) => placeholder("unregonizedSpreadInCx")
-                 }
-               );
+            List.map(arguments, argument =>
+              switch (argument) {
+              | Expression(expr) => expressionMapper(~context, expr)
+              | Spread(_) => placeholder("unregonizedSpreadInCx")
+              }
+            );
           Exp.apply(
             Exp.ident(
               astHelperStrLidIdent(
@@ -1953,19 +1908,18 @@ and expressionMapper =
         }
       | JSXElement(element) => jsxElementMapper(~context, element)
       | Array({Array.elements}) =>
-        elements
-        |> List.map(element =>
-             switch (element) {
-             | None =>
-               Exp.construct(
-                 astHelperStrLidIdent(~correct=false, ["None"]),
-                 None,
-               )
-             | Some(Expression(e)) => expressionMapper(~context, e)
-             | Some(Spread((_, _))) =>
-               placeholder("argumentSpreadNotImplementedYet")
-             }
-           )
+        List.map(elements, element =>
+          switch (element) {
+          | None =>
+            Exp.construct(
+              astHelperStrLidIdent(~correct=false, ["None"]),
+              None,
+            )
+          | Some(Expression(e)) => expressionMapper(~context, e)
+          | Some(Spread((_, _))) =>
+            placeholder("argumentSpreadNotImplementedYet")
+          }
+        )
         |> Exp.array
       | Binary({Binary.operator, left, right}) =>
         let operatorReason =
@@ -2171,13 +2125,12 @@ let topStatementsMapper = statementWrap => {
           },
         ] =>
         let propTypes =
-          pcstr_fields
-          |> List.filter(({pcf_desc}) =>
-               switch (pcf_desc) {
-               | Pcf_val(({txt: "propTypes"}, _, _)) => true
-               | _ => false
-               }
-             );
+          List.keep(pcstr_fields, ({pcf_desc}) =>
+            switch (pcf_desc) {
+            | Pcf_val(({txt: "propTypes"}, _, _)) => true
+            | _ => false
+            }
+          );
         let extraDeclarationsFromProps =
           switch (propTypes) {
           | [
@@ -2217,13 +2170,12 @@ let topStatementsMapper = statementWrap => {
           };
         /* same for state type */
         let getInitialState =
-          pcstr_fields
-          |> List.filter(({pcf_desc}) =>
-               switch (pcf_desc) {
-               | Pcf_method(({txt: "getInitialState"}, _, _)) => true
-               | _ => false
-               }
-             );
+          List.keep(pcstr_fields, ({pcf_desc}) =>
+            switch (pcf_desc) {
+            | Pcf_method(({txt: "getInitialState"}, _, _)) => true
+            | _ => false
+            }
+          );
         let extraDeclarationsFromState =
           switch (getInitialState) {
           | [initialStateDeclaration] => [
@@ -2351,7 +2303,7 @@ let () =
       ),
     );
   } else {
-    let file = Sys.argv[1];
+    let file = Array.getExn(Sys.argv, 1);
     let parse_options =
       Some(
         Parser_env.{
@@ -2380,8 +2332,10 @@ let () =
     output_string(stdout, Config.ast_impl_magic_number);
     output_value(stdout, file);
     let result: Parsetree.structure =
-      statements
-      |> List.map(statementWrap => topStatementsMapper(statementWrap))
-      |> List.concat;
+      List.map(statements, statementWrap =>
+        topStatementsMapper(statementWrap)
+      )
+      |. List.toArray
+      |. List.concatMany;
     output_value(stdout, result);
   };
