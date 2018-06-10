@@ -10,13 +10,13 @@
   },
   "scripts": {
     "build": "bsb -make-world",
-    "start-dont-use-has-bug-for-now": "bsb -make-world -w",
+    "start": "bsb -make-world -w",
     "clean": "bsb -clean-world",
     "test": "./jeason.sh ./test.js",
     "getReasonAst": "refmt --print ast ./getReasonAst.re",
     "postinstall": "npm run build"
   },
   "devDependencies": {
-    "bs-platform": "bsansouci/bsb-native"
+    "bs-platform": "bsansouci/bsb-native#release"
   }
 }

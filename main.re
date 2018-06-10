@@ -40,8 +40,7 @@ let correctIdentifier = ident => {
 
 let objectContainsKeyName = (~key, ~properties) =>
   Parser_flow.Ast.Expression.(
-    properties
-    |. List.getBy(property =>
+    List.getBy(properties, property =>
          switch (property) {
          | Object.Property((
              _,
@@ -447,8 +446,7 @@ let propTypesToActualTypes = fields => {
       ),
   };
   let externalTypeInner =
-    fields
-    |. List.reverse
+    List.reverse(fields)
     |. List.reduce(
          inner,
          (acc, ({txt}, {pexp_desc} as expr)) => {
@@ -788,7 +786,7 @@ and jsxElementMapper =
           }
         );
       let childrenReact =
-        children |. List.keepMap(child => jsxChildMapper(~context, child));
+        List.keepMap(children, child => jsxChildMapper(~context, child));
       let constructRecordOrLabels = f =>
         List.map(attributes, attr =>
           switch (attr) {
@@ -1616,7 +1614,7 @@ and expressionMapper =
           /* Js: () => 1 has 0 param. In reason, it has one param: unit. */
           switch (argumentsIntoReasonArguments(arguments)) {
           | [] => [("", expUnit)]
-          | oneArgOrMore => oneArgOrMore |. List.map(arg => ("", arg))
+          | oneArgOrMore => List.map(oneArgOrMore, arg => ("", arg))
           };
         switch (callee, context.insideReactClass, arguments) {
         | (
